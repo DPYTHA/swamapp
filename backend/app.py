@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import re
 import json 
 import random
+import logging
 import string
 import requests
 import os  # Ajout manquant
@@ -296,7 +297,9 @@ def calculer_frais_livraison(distance):
 
 # ===================== FONCTIONS NOTIFICATIONS =====================
 
-
+@app.route('/')
+def index():
+    return jsonify({'status': 'ok', 'message': 'SWAM API is running'})
 # ===================== ROUTES AUTH =====================
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -884,7 +887,6 @@ def get_all_users():
         'id': u.id,
         'nom': u.nom,
         'telephone': u.telephone,
-        'email': getattr(u, 'email', None),
         'role': u.role,
         'date_inscription': u.date_inscription.isoformat() if u.date_inscription else None
     } for u in users]), 200
@@ -2238,7 +2240,7 @@ def create_sample_data():
             telephone='771234567',
             mot_de_passe=bcrypt.generate_password_hash('admin123').decode('utf-8'),
             role='admin',
-            email='admin@swami.com'
+            
         )
         db.session.add(admin)
         print("✅ Admin créé: 771234567 / admin123")
@@ -2994,4 +2996,5 @@ def health():
 
 # ===================== LANCEMENT =====================
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+   
+    app.run(debug=False, host='0.0.0.0', port=5000)
