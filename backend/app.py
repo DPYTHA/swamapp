@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Initialisation de l'application
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['*'])
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -245,6 +245,9 @@ def validate_telephone(telephone):
     telephone = re.sub(r'[\s\-]', '', telephone)
     pattern = r'^[0-9]{9,15}$'
     return re.match(pattern, telephone) is not None
+
+def calculer_frais_livraison(distance):
+    return (distance // 100 + (1 if distance % 100 > 0 else 0)) * 150
 
 # ===================== FONCTIONS NOTIFICATIONS =====================
 def send_push_notification(user_id, title, body, data=None, notification_type='default'):
@@ -712,6 +715,49 @@ def get_all_commandes():
     
     return jsonify(result)
 
+@app.route('/api/admin/commandes/<string:code_suivi>', methods=['GET'])
+@jwt_required()
+def get_admin_commande_detail(code_suivi):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.filter_by(code_suivi=code_suivi).first()
+    
+    if not commande:
+        return jsonify({'message': 'Commande non trouvée'}), 404
+    
+    paiement = Paiement.query.filter_by(commande_id=commande.id).first()
+    
+    return jsonify({
+        'id': commande.id,
+        'code_suivi': commande.code_suivi,
+        'client': {
+            'nom': commande.client.nom or 'Client',
+            'telephone': commande.client.telephone
+        },
+        'date': commande.date_commande.isoformat() if commande.date_commande else None,
+        'sous_total': commande.sous_total,
+        'frais_livraison': commande.frais_livraison,
+        'reduction': commande.reduction,
+        'total': commande.total,
+        'statut': commande.statut,
+        'adresse': commande.adresse_livraison,
+        'paiement': {
+            'id': paiement.id if paiement else None,
+            'statut': paiement.statut if paiement else 'non_defini',
+            'methode': paiement.methode if paiement else None,
+            'montant': paiement.montant if paiement else None
+        },
+        'articles': [{
+            'nom': d.produit.nom,
+            'quantite': d.quantite,
+            'prix': d.prix_unitaire
+        } for d in commande.details]
+    })
+
 # ===================== ROUTES ADRESSES =====================
 @app.route('/api/client/adresses', methods=['GET'])
 @jwt_required()
@@ -756,6 +802,52 @@ def create_client_adresse():
         db.session.commit()
         
         return jsonify({'message': 'Adresse créée avec succès'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/client/adresses/<int:adresse_id>', methods=['PUT'])
+@jwt_required()
+def update_client_adresse(adresse_id):
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        adresse = Adresse.query.filter_by(id=adresse_id, user_id=current_user_id).first()
+        if not adresse:
+            return jsonify({'message': 'Adresse non trouvée'}), 404
+        
+        if data.get('est_principale') and not adresse.est_principale:
+            Adresse.query.filter_by(user_id=current_user_id, est_principale=True).update({'est_principale': False})
+        
+        if 'nom' in data:
+            adresse.nom = data['nom']
+        if 'adresse' in data:
+            adresse.adresse = data['adresse']
+        if 'telephone' in data:
+            adresse.telephone = data['telephone']
+        if 'est_principale' in data:
+            adresse.est_principale = data['est_principale']
+        
+        db.session.commit()
+        return jsonify({'message': 'Adresse modifiée avec succès'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/client/adresses/<int:adresse_id>', methods=['DELETE'])
+@jwt_required()
+def delete_client_adresse(adresse_id):
+    try:
+        current_user_id = get_jwt_identity()
+        adresse = Adresse.query.filter_by(id=adresse_id, user_id=current_user_id).first()
+        
+        if not adresse:
+            return jsonify({'message': 'Adresse non trouvée'}), 404
+        
+        db.session.delete(adresse)
+        db.session.commit()
+        return jsonify({'message': 'Adresse supprimée avec succès'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': 'Erreur serveur'}), 500
@@ -823,7 +915,6 @@ def remove_from_wishlist(wishlist_id):
         
         db.session.delete(wishlist_item)
         db.session.commit()
-        
         return jsonify({'message': 'Produit retiré de la liste'}), 200
     except Exception as e:
         db.session.rollback()
@@ -1010,6 +1101,38 @@ def create_produit():
         db.session.commit()
         
         return jsonify({'message': 'Produit créé avec succès'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/produits/<int:produit_id>', methods=['PUT'])
+@jwt_required()
+def update_produit(produit_id):
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produit = Produit.query.get_or_404(produit_id)
+        data = request.get_json()
+        
+        if 'nom' in data:
+            produit.nom = data['nom']
+        if 'description' in data:
+            produit.description = data['description']
+        if 'prix' in data:
+            produit.prix = float(data['prix'])
+        if 'categorie' in data:
+            produit.categorie = data['categorie']
+        if 'stock' in data:
+            produit.stock = int(data['stock'])
+        if 'image_url' in data:
+            produit.image_url = data['image_url']
+        
+        db.session.commit()
+        return jsonify({'message': 'Produit modifié avec succès'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': 'Erreur serveur'}), 500
