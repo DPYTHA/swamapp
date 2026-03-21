@@ -1,12 +1,6 @@
-// src/utils/constants.js
 
-// ✅ Pour la production (Railway)
 export const API_URL = 'https://swamapp-production.up.railway.app/api';
 
-// 📌 Si tu veux basculer entre dev et prod, tu peux faire :
-// export const API_URL = __DEV__ 
-//     ? 'http://192.168.0.107:5000/api'   // Développement local
-//     : 'https://swamapp-production.up.railway.app/api';  // Production
 
 export const COLORS = {
     primary: '#FF6B6B',
