@@ -1,1 +1,2 @@
-web: python backend/app.py
+# Procfile
+web: gunicorn --chdir backend app:app
