@@ -1,5 +1,5 @@
 # Framework principal
-Flask==3.0.0
+Flask==2.3.3
 Flask-SQLAlchemy==3.1.1
 Flask-CORS==4.0.0
 Flask-Bcrypt==1.0.1
@@ -13,8 +13,8 @@ SQLAlchemy==2.0.23
 python-dotenv==1.0.0
 requests==2.31.0
 
-# Serveur de production (pour Railway)
+# Serveur de production
 gunicorn==21.2.0
 
-# Optionnel - pour les logs
+# Optionnel
 python-json-logger==2.0.7
