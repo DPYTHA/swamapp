@@ -2960,8 +2960,31 @@ def admin_create_promo():
         db.session.rollback()
         print(f"❌ Erreur admin_create_promo: {str(e)}")
         return jsonify({'message': 'Erreur lors de la création'}), 500
-if __name__ == '__main__':
-    with app.app_context():
+
+
+# ===================== CRÉATION DES TABLES =====================
+with app.app_context():
+    try:
+        # Créer toutes les tables si elles n'existent pas
         db.create_all()
-        create_sample_data()
+        print("✅ Tables créées avec succès")
+        
+        # Créer un admin par défaut si nécessaire
+        admin = User.query.filter_by(role='admin').first()
+        if not admin:
+            admin = User(
+                nom='Admin',
+                telephone='771234567',
+                mot_de_passe=bcrypt.generate_password_hash('admin123').decode('utf-8'),
+                role='admin'
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("✅ Admin par défaut créé: 771234567 / admin123")
+            
+    except Exception as e:
+        print(f"⚠️ Erreur lors de la création des tables: {e}")
+
+# ===================== LANCEMENT =====================
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
