@@ -400,8 +400,6 @@ def update_profile():
     
     if 'nom' in data:
         user.nom = data['nom']
-    if 'email' in data:
-        user.email = data['email']
     
     db.session.commit()
     
@@ -411,7 +409,6 @@ def update_profile():
             'id': user.id,
             'nom': user.nom,
             'telephone': user.telephone,
-            'email': user.email,
             'role': user.role,
             'date_inscription': user.date_inscription.isoformat() if user.date_inscription else None
         }
@@ -2984,6 +2981,16 @@ with app.app_context():
             
     except Exception as e:
         print(f"⚠️ Erreur lors de la création des tables: {e}")
+
+@app.route('/')
+@app.route('/api/health')
+def health():
+    return jsonify({
+        'status': 'OK',
+        'message': 'SWAM API is running',
+        'database_url': bool(os.getenv('DATABASE_URL'))
+    })
+
 
 # ===================== LANCEMENT =====================
 if __name__ == '__main__':
