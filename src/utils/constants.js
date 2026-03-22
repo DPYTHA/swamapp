@@ -1,5 +1,5 @@
 
-export const API_URL = 'https://swamapp-production.up.railway.app';
+export const API_URL = 'https://swamapp-production.up.railway.app/api';
 
 
 export const COLORS = {
