@@ -1,4 +1,3 @@
-# Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -10,8 +9,10 @@ COPY requirements.txt .
 # Installer les dépendances
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Créer un fichier pour que Railway sache que c'est un service web
-EXPOSE 5000
+# Railway utilise un port dynamique
+ENV PORT=8080
 
-# Démarrer l'application
-CMD ["gunicorn", "--chdir", "backend", "--bind", "0.0.0.0:5000", "app:app"]
+EXPOSE 8080
+
+# Démarrer avec le bon port
+CMD ["sh", "-c", "gunicorn --chdir backend --bind 0.0.0.0:$PORT app:app"]
