@@ -1,1 +1,1 @@
-web: gunicorn --chdir backend --bind 0.0.0.0:8000 minimal_app:app
+web: gunicorn --chdir backend --bind 0.0.0.0:8000 app:app
