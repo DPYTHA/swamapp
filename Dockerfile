@@ -12,8 +12,8 @@ ENV PYTHONPATH=/app
 # Installer les dépendances
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Exposer le port
-EXPOSE 8080
+# Exposer le port (doit correspondre au bind)
+EXPOSE 5000
 
-# Commande de démarrage avec port fixe
+# Commande de démarrage
 CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:5000"]
