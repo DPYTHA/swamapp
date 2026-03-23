@@ -10,9 +10,9 @@ def health():
     return jsonify({
         'status': 'OK',
         'message': 'Minimal API is running',
-        'port': os.getenv('PORT', '5000')
+        'port': os.getenv('PORT', '8080')
     })
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
