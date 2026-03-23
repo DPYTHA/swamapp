@@ -16,60 +16,63 @@ try:
 except Exception as e:
     print(f"❌ Erreur import SQLAlchemy: {e}", file=sys.stderr)
     sys.exit(1)
-
-# Continue pour tous les imports...
-
-#--------------------------------------------------------------------
-
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from datetime import datetime, timedelta, timezone
-import re
-import json 
-import random
-import logging
-import string
-import requests
+from flask_jwt_extended import JWTManager
+from datetime import timedelta
 import os
-from functools import wraps
 from dotenv import load_dotenv
+import logging
+import requests
 
-# Configuration du logging
+# ================== LOGGING ==================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialisation de l'application
+# ================== APP ==================
 app = Flask(__name__)
-CORS(app, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['*'])
 
-# Charger les variables d'environnement
+# CORS FIX (important pour mobile / Expo)
+CORS(app, supports_credentials=True)
+
+# ================== ENV ==================
 load_dotenv()
 
-# Configuration
-class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-dev-key')
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://localhost/swami')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
-    CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
-    CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
-    CLOUDINARY_UPLOAD_PRESET = os.getenv('CLOUDINARY_UPLOAD_PRESET', 'swam_products')
+# ================== DATABASE FIX (RAILWAY) ==================
+database_url = os.getenv("DATABASE_URL")
 
-# Utilisation
-app.config['SECRET_KEY'] = Config.SECRET_KEY
-app.config['JWT_SECRET_KEY'] = Config.JWT_SECRET_KEY
-app.config['SQLALCHEMY_DATABASE_URI'] = Config.SQLALCHEMY_DATABASE_URI
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = Config.SQLALCHEMY_TRACK_MODIFICATIONS
+if database_url:
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+else:
+    database_url = "sqlite:///local.db"
+
+# ================== CLOUDINARY CONFIG ==================
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_UPLOAD_PRESET = os.getenv("CLOUDINARY_UPLOAD_PRESET")
+
+# ================== CONFIG ==================
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
 
-# Initialisation des extensions
+# ================== INIT ==================
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+# ================== ROUTE TEST ==================
+@app.route('/api/health')
+def health():
+    return jsonify({
+        "status": "OK",
+        "database": database_url is not None,
+        "cloudinary": bool(CLOUDINARY_CLOUD_NAME)
+    })
 
 # ===================== MODELES =====================
 class User(db.Model):
@@ -1181,5 +1184,6 @@ with app.app_context():
         logger.error(f"Erreur création tables: {e}")
 
 # ===================== LANCEMENT =====================
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8080)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
