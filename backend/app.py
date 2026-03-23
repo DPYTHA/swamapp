@@ -27,7 +27,26 @@ import os
 from dotenv import load_dotenv
 import logging
 import requests
-
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import (
+    JWTManager, 
+    create_access_token, 
+    jwt_required, 
+    get_jwt_identity
+)
+from datetime import datetime, timedelta, timezone
+import re
+import json 
+import random
+import logging
+import string
+import requests
+import os
+from functools import wraps
+from dotenv import load_dotenv
 # ================== LOGGING ==================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
