@@ -678,6 +678,46 @@ def get_mes_commandes():
     
     return jsonify(result)
 
+# ===================== ROUTE PAIEMENT PAR COMMANDE =====================
+@app.route('/api/commandes/<int:commande_id>/paiement', methods=['GET'])
+@jwt_required()
+def get_paiement_by_commande(commande_id):
+    """Récupère le paiement associé à une commande"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Récupérer la commande
+        commande = Commande.query.get(commande_id)
+        if not commande:
+            return jsonify({'message': 'Commande non trouvée'}), 404
+        
+        # Vérifier que l'utilisateur a le droit de voir ce paiement
+        user = User.query.get(current_user_id)
+        if commande.client_id != current_user_id and (not user or user.role != 'admin'):
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        # Récupérer le paiement
+        paiement = Paiement.query.filter_by(commande_id=commande_id).first()
+        
+        if not paiement:
+            return jsonify({'message': 'Paiement non trouvé'}), 404
+        
+        return jsonify({
+            'id': paiement.id,
+            'commande_id': paiement.commande_id,
+            'code_suivi': paiement.code_suivi,
+            'montant': paiement.montant,
+            'methode': paiement.methode,
+            'numero_transaction': paiement.numero_transaction,
+            'statut': paiement.statut,
+            'date_paiement': paiement.date_paiement.isoformat() if paiement.date_paiement else None,
+            'date_validation': paiement.date_validation.isoformat() if paiement.date_validation else None
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erreur get_paiement_by_commande: {e}")
+        return jsonify({'message': 'Erreur serveur'}), 500
+
 @app.route('/api/commandes/suivi/<string:code_suivi>', methods=['GET'])
 def suivre_commande(code_suivi):
     commande = Commande.query.filter_by(code_suivi=code_suivi).first()

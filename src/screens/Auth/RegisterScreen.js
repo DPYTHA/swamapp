@@ -22,6 +22,12 @@ export default function RegisterScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
 
+
+    console.log('🔥🔥🔥 REGISTER CLICKED 🔥🔥🔥');
+console.log('📞 Telephone:', telephone);
+console.log('🔑 Password:', motDePasse);
+console.log('👤 Nom:', nom);
+console.log('🔍 Register function:', typeof register);
     const handleRegister = async () => {
         // Validations
         if (!telephone || !motDePasse) {

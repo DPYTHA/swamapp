@@ -389,7 +389,7 @@ export default function OrderDetailScreen({ route, navigation }) {
                         <Text style={styles.supportTitle}>Contacter le support</Text>
 
                         <TouchableOpacity style={styles.supportButton} onPress={handleWhatsApp}>
-                            <Icon name="whatsapp" size={24} color="#25D366" />
+                            <Icon name="chat" size={24} color="#25D366" />
                             <View style={styles.supportTextContainer}>
                                 <Text style={styles.supportButtonText}>WhatsApp</Text>
                                 <Text style={styles.supportDetail}>+225 07 57 12 36 19</Text>
