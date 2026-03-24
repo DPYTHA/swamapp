@@ -1,4 +1,3 @@
-
 import sys
 print("=== DÉMARRAGE ===", file=sys.stderr)
 sys.stderr.flush()
@@ -16,19 +15,7 @@ try:
 except Exception as e:
     print(f"❌ Erreur import SQLAlchemy: {e}", file=sys.stderr)
     sys.exit(1)
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager
-from datetime import timedelta
-from datetime import datetime, timedelta, timezone
-import os
-from dotenv import load_dotenv
-import logging
-import requests
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import (
@@ -47,6 +34,7 @@ import requests
 import os
 from functools import wraps
 from dotenv import load_dotenv
+
 # ================== LOGGING ==================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,7 +43,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # CORS FIX (important pour mobile / Expo)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['*'])
 
 # ================== ENV ==================
 load_dotenv()
@@ -86,6 +74,7 @@ bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
 # ================== ROUTE TEST ==================
+@app.route('/')
 @app.route('/api/health')
 def health():
     return jsonify({
@@ -276,6 +265,7 @@ class UtilisationCodePromo(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id'), nullable=True)
     utilise_le = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
 # ===================== FONCTIONS UTILES =====================
 def generer_code_suivi():
     while True:
@@ -338,17 +328,6 @@ def send_push_notification(user_id, title, body, data=None, notification_type='d
     except Exception as e:
         logger.error(f"Exception lors de l'envoi: {e}")
         return False
-
-# ===================== ROUTES HEALTH =====================
-@app.route('/')
-@app.route('/api/health')
-def health_check():
-    return jsonify({
-        'status': 'OK',
-        'message': 'SWAM API is running',
-        'timestamp': datetime.utcnow().isoformat(),
-        'database': bool(os.getenv('DATABASE_URL'))
-    })
 
 # ===================== ROUTES AUTH =====================
 @app.route('/api/register', methods=['POST'])
@@ -678,46 +657,6 @@ def get_mes_commandes():
     
     return jsonify(result)
 
-# ===================== ROUTE PAIEMENT PAR COMMANDE =====================
-@app.route('/api/commandes/<int:commande_id>/paiement', methods=['GET'])
-@jwt_required()
-def get_paiement_by_commande(commande_id):
-    """Récupère le paiement associé à une commande"""
-    try:
-        current_user_id = get_jwt_identity()
-        
-        # Récupérer la commande
-        commande = Commande.query.get(commande_id)
-        if not commande:
-            return jsonify({'message': 'Commande non trouvée'}), 404
-        
-        # Vérifier que l'utilisateur a le droit de voir ce paiement
-        user = User.query.get(current_user_id)
-        if commande.client_id != current_user_id and (not user or user.role != 'admin'):
-            return jsonify({'message': 'Accès non autorisé'}), 403
-        
-        # Récupérer le paiement
-        paiement = Paiement.query.filter_by(commande_id=commande_id).first()
-        
-        if not paiement:
-            return jsonify({'message': 'Paiement non trouvé'}), 404
-        
-        return jsonify({
-            'id': paiement.id,
-            'commande_id': paiement.commande_id,
-            'code_suivi': paiement.code_suivi,
-            'montant': paiement.montant,
-            'methode': paiement.methode,
-            'numero_transaction': paiement.numero_transaction,
-            'statut': paiement.statut,
-            'date_paiement': paiement.date_paiement.isoformat() if paiement.date_paiement else None,
-            'date_validation': paiement.date_validation.isoformat() if paiement.date_validation else None
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Erreur get_paiement_by_commande: {e}")
-        return jsonify({'message': 'Erreur serveur'}), 500
-
 @app.route('/api/commandes/suivi/<string:code_suivi>', methods=['GET'])
 def suivre_commande(code_suivi):
     commande = Commande.query.filter_by(code_suivi=code_suivi).first()
@@ -842,6 +781,351 @@ def get_admin_commande_detail(code_suivi):
             'prix': d.prix_unitaire
         } for d in commande.details]
     })
+
+@app.route('/api/admin/paiements', methods=['GET'])
+@jwt_required()
+def get_paiements_en_attente():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    paiements = Paiement.query.filter_by(statut='en_attente').order_by(Paiement.date_paiement.desc()).all()
+    
+    return jsonify([{
+        'id': p.id,
+        'code_suivi': p.code_suivi,
+        'montant': p.montant,
+        'methode': p.methode,
+        'numero_transaction': p.numero_transaction,
+        'date_paiement': p.date_paiement.isoformat() if p.date_paiement else None,
+        'client': {
+            'nom': p.commande.client.nom or 'Client',
+            'telephone': p.commande.client.telephone
+        },
+        'commande': {
+            'id': p.commande.id,
+            'total': p.commande.total,
+            'adresse': p.commande.adresse_livraison,
+            'articles': [{
+                'nom': d.produit.nom,
+                'quantite': d.quantite,
+                'prix': d.prix_unitaire
+            } for d in p.commande.details]
+        }
+    } for p in paiements])
+
+@app.route('/api/admin/paiements/<int:paiement_id>/valider', methods=['POST'])
+@jwt_required()
+def valider_paiement(paiement_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    data = request.get_json()
+    paiement = Paiement.query.get_or_404(paiement_id)
+    
+    paiement.statut = 'valide'
+    paiement.date_validation = datetime.now(timezone.utc)
+    paiement.valide_par = current_user_id
+    if data and data.get('numero_transaction'):
+        paiement.numero_transaction = data['numero_transaction']
+    
+    commande = paiement.commande
+    commande.statut = 'preparation'
+    commande.statut_paiement = 'valide'
+    
+    for detail in commande.details:
+        produit = Produit.query.get(detail.produit_id)
+        produit.stock -= detail.quantite
+    
+    db.session.commit()
+    
+    send_push_notification(
+        user_id=commande.client_id,
+        title="✅ Paiement validé",
+        body=f"Votre paiement de {paiement.montant} FCFA a été validé. Votre commande est en préparation.",
+        data={
+            'type': 'payment_validated',
+            'orderId': commande.id,
+            'code': commande.code_suivi,
+            'montant': paiement.montant
+        },
+        notification_type='payment'
+    )
+    
+    return jsonify({'message': 'Paiement validé avec succès'}), 200
+
+# ===================== ROUTES ADMIN - MISE À JOUR STATUT =====================
+@app.route('/api/commandes/<int:commande_id>/statut', methods=['PUT'])
+@jwt_required()
+def update_commande_statut(commande_id):
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({'message': 'Utilisateur non trouvé'}), 404
+    
+    commande = Commande.query.get_or_404(commande_id)
+    
+    if user.role != 'admin' and commande.livreur_id != current_user_id:
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    data = request.get_json()
+    if 'statut' not in data:
+        return jsonify({'message': 'Statut requis'}), 400
+    
+    nouveau_statut = data['statut']
+    ancien_statut = commande.statut
+    
+    transitions_valides = {
+        'en_attente_paiement': ['preparation', 'annulee'],
+        'preparation': ['livraison', 'annulee'],
+        'livraison': ['livree', 'annulee'],
+        'livree': [],
+        'annulee': []
+    }
+    
+    if nouveau_statut not in transitions_valides.get(ancien_statut, []):
+        if user.role != 'admin':
+            return jsonify({'message': 'Transition de statut non autorisée'}), 400
+    
+    commande.statut = nouveau_statut
+    
+    if nouveau_statut == 'livree':
+        commande.date_livraison = datetime.now(timezone.utc)
+        send_push_notification(
+            user_id=commande.client_id,
+            title="✅ Commande livrée",
+            body=f"Votre commande {commande.code_suivi} a été livrée avec succès",
+            data={
+                'type': 'order_delivered',
+                'orderId': commande.id,
+                'code': commande.code_suivi
+            },
+            notification_type='order_update'
+        )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Statut mis à jour avec succès',
+        'code_suivi': commande.code_suivi,
+        'statut': commande.statut,
+        'date_livraison': commande.date_livraison.isoformat() if commande.date_livraison else None
+    }), 200
+
+# ===================== ROUTES LIVREUR =====================
+@app.route('/api/livreur/commandes-disponibles', methods=['GET'])
+@jwt_required()
+def livreur_commandes_disponibles():
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commandes = Commande.query.filter_by(
+        statut='preparation',
+        livreur_id=None,
+        recherche_livreur=True
+    ).order_by(Commande.date_recherche.desc()).all()
+    
+    return jsonify([{
+        'id': c.id,
+        'code_suivi': c.code_suivi,
+        'client': {
+            'nom': c.client.nom or 'Client',
+            'telephone': c.client.telephone
+        },
+        'adresse_livraison': c.adresse_livraison,
+        'distance': c.distance,
+        'frais_livraison': c.frais_livraison,
+        'total': c.total,
+        'gain': c.frais_livraison * 0.6,
+        'date_recherche': c.date_recherche.strftime('%H:%M') if c.date_recherche else None
+    } for c in commandes])
+
+@app.route('/api/livreur/mes-livraisons', methods=['GET'])
+@jwt_required()
+def livreur_mes_livraisons():
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commandes = Commande.query.filter_by(livreur_id=current_user_id)\
+        .filter(Commande.statut.in_(['preparation', 'livraison']))\
+        .order_by(Commande.date_commande.desc())\
+        .all()
+    
+    return jsonify([{
+        'id': c.id,
+        'code_suivi': c.code_suivi,
+        'client': {
+            'nom': c.client.nom or 'Client',
+            'telephone': c.client.telephone
+        },
+        'adresse_livraison': c.adresse_livraison,
+        'statut': c.statut,
+        'distance': c.distance,
+        'frais_livraison': c.frais_livraison,
+        'total': c.total
+    } for c in commandes])
+
+@app.route('/api/livreur/historique-livraisons', methods=['GET'])
+@jwt_required()
+def livreur_historique_livraisons():
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commandes = Commande.query.filter_by(livreur_id=current_user_id)\
+        .filter(Commande.statut.in_(['livree', 'annulee']))\
+        .order_by(Commande.date_commande.desc())\
+        .all()
+    
+    return jsonify([{
+        'id': c.id,
+        'code_suivi': c.code_suivi,
+        'adresse_livraison': c.adresse_livraison,
+        'statut': c.statut,
+        'distance': c.distance,
+        'frais_livraison': c.frais_livraison,
+        'gain': c.frais_livraison * 0.7,
+        'date_commande': c.date_commande.isoformat() if c.date_commande else None,
+        'date_livraison': c.date_livraison.isoformat() if c.date_livraison else None
+    } for c in commandes])
+
+@app.route('/api/livreur/commandes/<int:commande_id>/accepter', methods=['PUT'])
+@jwt_required()
+def livreur_accepter_livraison(commande_id):
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.get_or_404(commande_id)
+    
+    if commande.livreur_id:
+        return jsonify({'message': 'Cette commande a déjà un livreur'}), 400
+    
+    if commande.statut != 'preparation':
+        return jsonify({'message': 'Cette commande n\'est pas disponible'}), 400
+    
+    commande.livreur_id = current_user_id
+    commande.statut = 'preparation'
+    commande.recherche_livreur = False
+    db.session.commit()
+    
+    send_push_notification(
+        user_id=commande.client_id,
+        title="🚚 Livreur en route",
+        body=f"Un livreur a accepté votre commande {commande.code_suivi}",
+        data={
+            'type': 'driver_assigned',
+            'orderId': commande.id,
+            'code': commande.code_suivi
+        },
+        notification_type='order_update'
+    )
+    
+    admins = User.query.filter_by(role='admin').all()
+    for admin in admins:
+        send_push_notification(
+            user_id=admin.id,
+            title="✅ Livraison acceptée",
+            body=f"Livreur {livreur.nom or livreur.telephone} a accepté la commande {commande.code_suivi}",
+            data={
+                'type': 'order_accepted',
+                'orderId': commande.id,
+                'code': commande.code_suivi,
+                'livreur': livreur.nom or livreur.telephone
+            },
+            notification_type='admin_alert'
+        )
+    
+    return jsonify({'message': 'Livraison acceptée avec succès'}), 200
+
+@app.route('/api/livreur/commandes/<int:commande_id>/statut', methods=['PUT'])
+@jwt_required()
+def livreur_update_statut(commande_id):
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.get_or_404(commande_id)
+    
+    if commande.livreur_id != current_user_id:
+        return jsonify({'message': 'Cette commande ne vous est pas assignée'}), 403
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'message': 'Données JSON requises'}), 400
+        
+    nouveau_statut = data.get('statut')
+    if nouveau_statut not in ['livraison', 'livree']:
+        return jsonify({'message': 'Statut invalide'}), 400
+    
+    commande.statut = nouveau_statut
+    
+    if nouveau_statut == 'livree':
+        commande.date_livraison = datetime.now(timezone.utc)
+        send_push_notification(
+            user_id=commande.client_id,
+            title="✅ Commande livrée",
+            body=f"Votre commande {commande.code_suivi} a été livrée avec succès",
+            data={
+                'type': 'order_delivered',
+                'orderId': commande.id,
+                'code': commande.code_suivi
+            },
+            notification_type='order_update'
+        )
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Statut mis à jour avec succès',
+        'commande_id': commande.id,
+        'code_suivi': commande.code_suivi,
+        'nouveau_statut': commande.statut
+    }), 200
+
+@app.route('/api/livreur/stats', methods=['GET'])
+@jwt_required()
+def livreur_stats():
+    current_user_id = get_jwt_identity()
+    livreur = User.query.get(current_user_id)
+    
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    total_livraisons = Commande.query.filter_by(livreur_id=current_user_id).count()
+    
+    commandes = Commande.query.filter_by(livreur_id=current_user_id).all()
+    gains_total = sum(c.frais_livraison * 0.6 for c in commandes if c.frais_livraison)
+    
+    livraisons_aujourdhui = Commande.query.filter(
+        Commande.livreur_id == current_user_id,
+        Commande.date_commande >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    ).count()
+    
+    return jsonify({
+        'total_livraisons': total_livraisons,
+        'livraisons_aujourdhui': livraisons_aujourdhui,
+        'gains_total': gains_total,
+        'note_moyenne': 4.8
+    }), 200
 
 # ===================== ROUTES ADRESSES =====================
 @app.route('/api/client/adresses', methods=['GET'])
@@ -1024,7 +1308,7 @@ def envoyer_demande_support():
         
         return jsonify({
             'message': 'Demande envoyée avec succès',
-            'ticket_id': f"SUP-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            'ticket_id': f"SUP-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
         }), 200
     except Exception as e:
         return jsonify({'message': 'Erreur serveur'}), 500
@@ -1075,7 +1359,7 @@ def forgot_password():
     reset_code = ResetCode(
         telephone=telephone,
         code=code,
-        expires_at=datetime.utcnow() + timedelta(minutes=15)
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15)
     )
     
     ResetCode.query.filter_by(telephone=telephone).delete()
@@ -1100,7 +1384,7 @@ def verify_reset_code():
     if not reset_code:
         return jsonify({'message': 'Code invalide'}), 400
     
-    if reset_code.expires_at < datetime.utcnow():
+    if reset_code.expires_at < datetime.now(timezone.utc):
         return jsonify({'message': 'Code expiré'}), 400
     
     return jsonify({'message': 'Code valide'}), 200
@@ -1117,7 +1401,7 @@ def reset_password():
     
     reset_code = ResetCode.query.filter_by(telephone=telephone, code=code, used=False).first()
     
-    if not reset_code or reset_code.expires_at < datetime.utcnow():
+    if not reset_code or reset_code.expires_at < datetime.now(timezone.utc):
         return jsonify({'message': 'Code invalide ou expiré'}), 400
     
     if len(new_password) < 4:
