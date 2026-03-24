@@ -103,7 +103,7 @@ class User(db.Model):
     telephone = db.Column(db.String(20), unique=True, nullable=False)
     mot_de_passe = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='client')
-    date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
+    date_inscription = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     commandes_client = db.relationship('Commande', 
                                         foreign_keys='Commande.client_id',
@@ -130,7 +130,7 @@ class Produit(db.Model):
     categorie = db.Column(db.String(50), nullable=False)
     stock = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(500), nullable=True)
-    date_ajout = db.Column(db.DateTime, default=datetime.utcnow)
+    date_ajout = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     details_commandes = db.relationship('CommandeDetail', back_populates='produit', lazy=True)
 
@@ -141,7 +141,7 @@ class NotificationToken(db.Model):
     token = db.Column(db.String(255), unique=True, nullable=False)
     role = db.Column(db.String(50))
     platform = db.Column(db.String(20))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Commande(db.Model):
     __tablename__ = 'commandes'
@@ -194,7 +194,7 @@ class Paiement(db.Model):
     methode = db.Column(db.String(50), nullable=False)
     numero_transaction = db.Column(db.String(100), nullable=True)
     statut = db.Column(db.String(20), default='en_attente')
-    date_paiement = db.Column(db.DateTime, default=datetime.utcnow)
+    date_paiement = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     date_validation = db.Column(db.DateTime, nullable=True)
     valide_par = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
@@ -209,7 +209,7 @@ class ResetCode(db.Model):
     code = db.Column(db.String(6), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Adresse(db.Model):
     __tablename__ = 'adresses'
@@ -220,8 +220,8 @@ class Adresse(db.Model):
     adresse = db.Column(db.Text, nullable=False)
     telephone = db.Column(db.String(20), nullable=False)
     est_principale = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     user = db.relationship('User', backref=db.backref('adresses', lazy=True, cascade='all, delete-orphan'))
 
@@ -231,7 +231,7 @@ class Wishlist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     produit_id = db.Column(db.Integer, db.ForeignKey('produits.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = db.relationship('User', backref=db.backref('wishlist_items', lazy=True))
     produit = db.relationship('Produit', backref=db.backref('wishlisted_by', lazy=True))
@@ -245,7 +245,7 @@ class Avis(db.Model):
     produit_id = db.Column(db.Integer, db.ForeignKey('produits.id'), nullable=False)
     note = db.Column(db.Integer, nullable=False)
     commentaire = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     user = db.relationship('User', backref=db.backref('avis', lazy=True))
     commande = db.relationship('Commande', backref=db.backref('avis', lazy=True))
@@ -264,7 +264,7 @@ class CodePromo(db.Model):
     utilisations_actuelles = db.Column(db.Integer, default=0)
     date_debut = db.Column(db.DateTime, nullable=False)
     date_fin = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     utilisations = db.relationship('UtilisationCodePromo', backref='code_promo', lazy=True)
 
@@ -275,8 +275,7 @@ class UtilisationCodePromo(db.Model):
     code_promo_id = db.Column(db.Integer, db.ForeignKey('codes_promo.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     commande_id = db.Column(db.Integer, db.ForeignKey('commandes.id'), nullable=True)
-    utilise_le = db.Column(db.DateTime, default=datetime.utcnow)
-
+    utilise_le = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 # ===================== FONCTIONS UTILES =====================
 def generer_code_suivi():
     while True:
