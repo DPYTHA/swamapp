@@ -9,5 +9,5 @@ ENV PYTHONPATH=/app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Laisser Railway assigner le port via la variable d'environnement PORT
-CMD ["sh", "-c", "gunicorn backend.app:app --bind 0.0.0.0:$PORT"]
+# Utilise le port fourni par Railway
+CMD ["sh", "-c", "gunicorn backend.app:app --bind 0.0.0.0:${PORT}"]
