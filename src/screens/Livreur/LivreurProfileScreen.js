@@ -86,7 +86,7 @@ export default function LivreurProfileScreen({ navigation }) {
         }
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         Alert.alert(
             'Déconnexion',
             'Êtes-vous sûr de vouloir vous déconnecter ?',
@@ -95,12 +95,9 @@ export default function LivreurProfileScreen({ navigation }) {
                 {
                     text: 'Se déconnecter',
                     onPress: async () => {
-                        await logout();
-                        // ✅ RESET sur le navigateur parent (racine)
-                        navigation.getParent()?.reset({
-                            index: 0,
-                            routes: [{ name: 'Public' }],
-                        });
+                        await logout(); // Nettoie le token et l'état user
+                        // ✅ Cible le navigateur racine
+                        navigation.getParent()?.replace('Public');
                     },
                     style: 'destructive'
                 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     Alert,
     FlatList,
@@ -14,9 +14,6 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 
 // Données des destinations avec distances
 const DESTINATIONS = [
-
-
-
     // ===== PANGO 1 =====
     {
         id: 2,
@@ -48,7 +45,7 @@ const DESTINATIONS = [
         id: 6,
         nom: 'Pango 2',
         adresse: 'Atelier espoir, Assinie',
-        distance: 1000, // Valeur par défaut si non spécifiée
+        distance: 1000,
     },
     {
         id: 7,
@@ -178,7 +175,7 @@ const DESTINATIONS = [
         id: 26,
         nom: 'Voie du marché',
         adresse: 'EPP Assinie 1A et 1B, Assinie',
-        distance: 350,
+        distance: 490,
     },
     {
         id: 27,
@@ -192,7 +189,7 @@ const DESTINATIONS = [
         id: 28,
         nom: 'Voie du commissariat',
         adresse: 'Commissariat, Assinie',
-        distance: 270,
+        distance: 400,
     },
     {
         id: 29,
@@ -212,13 +209,13 @@ const DESTINATIONS = [
         id: 31,
         nom: 'Voie du dispensaire',
         adresse: 'Dispensaire, Assinie',
-        distance: 100,
+        distance: 400,
     },
     {
         id: 32,
         nom: 'Voie du dispensaire',
         adresse: 'Hôtel Sandrofia, Assinie',
-        distance: 300,
+        distance: 400,
     },
     {
         id: 33,
@@ -232,7 +229,7 @@ const DESTINATIONS = [
         id: 34,
         nom: 'Voie Catholique',
         adresse: 'Maternité, Assinie',
-        distance: 200,
+        distance: 400,
     },
 
     // ===== SAGBADOU =====
@@ -458,7 +455,6 @@ const DESTINATIONS = [
         adresse: 'Rond-point d\'Assouindé, Assinie',
         distance: 21200,
     },
-
 ];
 
 // Options de livraison
@@ -488,15 +484,14 @@ const DELIVERY_OPTIONS = [
         id: 'plus',
         label: 'Plus tard',
         description: 'Économisez 150 FCFA',
-        reduction: -150,
+        reduction: -110,
         icon: 'event',
     },
 ];
 
-// Fonction pour calculer les frais de livraison (dans DestinationScreen)
+// Fonction pour calculer les frais de livraison
 const calculateDeliveryFee = (distance) => {
-    const fee = Math.ceil(distance / 100) * 150;
-    console.log('📐 Calcul frais:', distance, 'm →', fee, 'FCFA');
+    const fee = Math.ceil(distance / 100) * 50;
     return fee;
 };
 
@@ -512,14 +507,26 @@ export default function DestinationScreen({ navigation, route }) {
         distance: '3000',
     });
 
-    // Calculer le total avec frais et réductions
+    // Ref pour le ScrollView
+    const scrollViewRef = useRef(null);
+
+    // Fonction pour défiler vers la section livraison
+    const scrollToDeliverySection = () => {
+        setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+    };
+
+    const handleSelectDestination = (destination) => {
+        setSelectedDestination(destination);
+        scrollToDeliverySection();
+    };
+
     const calculateFinalTotal = () => {
         if (!selectedDestination) return cartTotal;
-
         const deliveryFee = calculateDeliveryFee(selectedDestination.distance);
         const deliveryOption = DELIVERY_OPTIONS.find(opt => opt.id === selectedDelivery);
         const reduction = deliveryOption?.reduction || 0;
-
         return cartTotal + deliveryFee + reduction;
     };
 
@@ -537,42 +544,31 @@ export default function DestinationScreen({ navigation, route }) {
             distance: parseInt(newAddress.distance) || 3000,
         };
 
-        // Ajouter à la liste
         DESTINATIONS.push(newDest);
-        setSelectedDestination(newDest);
+        handleSelectDestination(newDest);
         setShowNewAddressModal(false);
         setNewAddress({ nom: '', adresse: '', telephone: '', distance: '3000' });
     };
 
-    // Dans DestinationScreen.js - handleGoToConfirmation
     const handleGoToConfirmation = () => {
         if (!selectedDestination) {
             Alert.alert('Erreur', 'Veuillez choisir une adresse de livraison');
             return;
         }
 
-        // Calculer les valeurs ICI avant de les envoyer
         const deliveryFee = calculateDeliveryFee(selectedDestination.distance);
         const reduction = DELIVERY_OPTIONS.find(opt => opt.id === selectedDelivery).reduction;
         const finalTotal = cartTotal + deliveryFee + reduction;
         const codeSuivi = 'SWAM-' + Date.now().toString().slice(-6);
 
-        console.log('📤 ENVOI VERS CONFIRMATION:', {
-            destination: selectedDestination.nom,
-            cartTotal,
-            deliveryFee,
-            reduction,
-            finalTotal
-        });
-
         navigation.navigate('CommandeConfirmation', {
             destination: selectedDestination,
             deliveryOption: selectedDelivery,
             cartTotal: cartTotal,
-            finalTotal: finalTotal,           // ← Calculé
+            finalTotal: finalTotal,
             cartItems: cartItems,
-            deliveryFee: deliveryFee,         // ← Calculé
-            reduction: reduction,             // ← Calculé
+            deliveryFee: deliveryFee,
+            reduction: reduction,
             codeSuivi: codeSuivi,
         });
     };
@@ -584,7 +580,7 @@ export default function DestinationScreen({ navigation, route }) {
         return (
             <TouchableOpacity
                 style={[styles.destinationCard, isSelected && styles.selectedCard]}
-                onPress={() => setSelectedDestination(item)}
+                onPress={() => handleSelectDestination(item)}
             >
                 <View style={styles.cardHeader}>
                     <View style={styles.titleContainer}>
@@ -631,7 +627,10 @@ export default function DestinationScreen({ navigation, route }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+                ref={scrollViewRef}
+                showsVerticalScrollIndicator={false}
+            >
                 {/* Message si aucune adresse sélectionnée */}
                 {!selectedDestination && (
                     <View style={styles.infoMessage}>
@@ -653,44 +652,42 @@ export default function DestinationScreen({ navigation, route }) {
                     />
                 </View>
 
-                {/* Options de livraison - visible seulement si une adresse est sélectionnée */}
-                {selectedDestination && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Délai de livraison</Text>
-                        <View style={styles.optionsGrid}>
-                            {DELIVERY_OPTIONS.map(option => (
-                                <TouchableOpacity
-                                    key={option.id}
-                                    style={[
-                                        styles.optionCard,
-                                        selectedDelivery === option.id && styles.selectedOption,
-                                    ]}
-                                    onPress={() => setSelectedDelivery(option.id)}
-                                >
-                                    <Icon
-                                        name={option.icon}
-                                        size={24}
-                                        color={selectedDelivery === option.id ? '#FF6B6B' : '#666'}
-                                    />
-                                    <Text style={[
-                                        styles.optionLabel,
-                                        selectedDelivery === option.id && styles.selectedOptionLabel
-                                    ]}>
-                                        {option.label}
+                {/* Options de livraison */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Délai de livraison</Text>
+                    <View style={styles.optionsGrid}>
+                        {DELIVERY_OPTIONS.map(option => (
+                            <TouchableOpacity
+                                key={option.id}
+                                style={[
+                                    styles.optionCard,
+                                    selectedDelivery === option.id && styles.selectedOption,
+                                ]}
+                                onPress={() => setSelectedDelivery(option.id)}
+                            >
+                                <Icon
+                                    name={option.icon}
+                                    size={24}
+                                    color={selectedDelivery === option.id ? '#FF6B6B' : '#666'}
+                                />
+                                <Text style={[
+                                    styles.optionLabel,
+                                    selectedDelivery === option.id && styles.selectedOptionLabel
+                                ]}>
+                                    {option.label}
+                                </Text>
+                                <Text style={styles.optionDesc}>{option.description}</Text>
+                                {option.reduction !== 0 && (
+                                    <Text style={styles.reductionText}>
+                                        {option.reduction} FCFA
                                     </Text>
-                                    <Text style={styles.optionDesc}>{option.description}</Text>
-                                    {option.reduction !== 0 && (
-                                        <Text style={styles.reductionText}>
-                                            {option.reduction} FCFA
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                )}
+                            </TouchableOpacity>
+                        ))}
                     </View>
-                )}
+                </View>
 
-                {/* Récapitulatif - visible seulement si une adresse est sélectionnée */}
+                {/* Récapitulatif */}
                 {selectedDestination && (
                     <View style={styles.summarySection}>
                         <Text style={styles.sectionTitle}>Récapitulatif</Text>
@@ -728,7 +725,7 @@ export default function DestinationScreen({ navigation, route }) {
                 )}
             </ScrollView>
 
-            {/* ✅ Bouton modifié pour aller vers Confirmation */}
+            {/* Bouton confirmation */}
             <TouchableOpacity
                 style={[styles.confirmButton, !selectedDestination && styles.confirmButtonDisabled]}
                 onPress={handleGoToConfirmation}

@@ -1,13 +1,13 @@
 // screens/Client/StatistiquesAchatScreen.js
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
     ActivityIndicator,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
     TouchableOpacity,
-    Dimensions
+    View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import api from '../../services/api';
@@ -15,7 +15,16 @@ import api from '../../services/api';
 const { width } = Dimensions.get('window');
 
 export default function StatistiquesAchatScreen({ navigation }) {
-    const [stats, setStats] = useState(null);
+    const [stats, setStats] = useState({
+        total_commandes: 0,
+        total_depense: 0,
+        moyenne_commande: 0,
+        commande_max: 0,
+        commande_min: 0,
+        produits_achetes: 0,
+        points_fidelite: 0,
+        categories_favorites: []
+    });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -26,9 +35,22 @@ export default function StatistiquesAchatScreen({ navigation }) {
     const loadStats = async () => {
         try {
             const response = await api.get('/client/statistiques');
-            setStats(response.data);
+            console.log('📊 Statistiques reçues:', response.data);
+
+            // ✅ Assurer que toutes les valeurs existent avec des valeurs par défaut
+            setStats({
+                total_commandes: response.data.total_commandes || 0,
+                total_depense: response.data.total_depense || 0,
+                moyenne_commande: response.data.moyenne_commande || 0,
+                commande_max: response.data.commande_max || 0,
+                commande_min: response.data.commande_min || 0,
+                produits_achetes: response.data.produits_achetes || 0,
+                points_fidelite: response.data.points_fidelite || 0,
+                categories_favorites: response.data.categories_favorites || []
+            });
         } catch (error) {
             console.log('❌ Erreur chargement stats:', error);
+            // ✅ Garder les valeurs par défaut en cas d'erreur
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -41,7 +63,8 @@ export default function StatistiquesAchatScreen({ navigation }) {
     };
 
     const formatMontant = (montant) => {
-        return montant.toLocaleString() + ' FCFA';
+        if (montant === undefined || montant === null) return '0 FCFA';
+        return Math.round(montant).toLocaleString() + ' FCFA';
     };
 
     const StatCard = ({ icon, label, value, color }) => (
@@ -58,6 +81,7 @@ export default function StatistiquesAchatScreen({ navigation }) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FF6B6B" />
+                <Text style={styles.loadingText}>Chargement des statistiques...</Text>
             </View>
         );
     }
@@ -78,22 +102,22 @@ export default function StatistiquesAchatScreen({ navigation }) {
             {/* Statistiques générales */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
-                
-                <StatCard 
+
+                <StatCard
                     icon="shopping-cart"
                     label="Total commandes"
                     value={stats.total_commandes}
                     color="#FF6B6B"
                 />
-                
-                <StatCard 
+
+                <StatCard
                     icon="payments"
                     label="Total dépensé"
                     value={formatMontant(stats.total_depense)}
                     color="#4CAF50"
                 />
-                
-                <StatCard 
+
+                <StatCard
                     icon="shopping-bag"
                     label="Produits achetés"
                     value={stats.produits_achetes}
@@ -104,21 +128,21 @@ export default function StatistiquesAchatScreen({ navigation }) {
             {/* Moyennes */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Moyennes</Text>
-                
-                <StatCard 
+
+                <StatCard
                     icon="trending-up"
                     label="Moyenne par commande"
                     value={formatMontant(stats.moyenne_commande)}
                     color="#9C27B0"
                 />
-                
+
                 <View style={styles.minMaxContainer}>
                     <View style={[styles.minMaxCard, { backgroundColor: '#4CAF5020' }]}>
                         <Icon name="arrow-upward" size={20} color="#4CAF50" />
                         <Text style={styles.minMaxLabel}>Max</Text>
                         <Text style={styles.minMaxValue}>{formatMontant(stats.commande_max)}</Text>
                     </View>
-                    
+
                     <View style={[styles.minMaxCard, { backgroundColor: '#F4433620' }]}>
                         <Icon name="arrow-downward" size={20} color="#F44336" />
                         <Text style={styles.minMaxLabel}>Min</Text>
@@ -127,24 +151,36 @@ export default function StatistiquesAchatScreen({ navigation }) {
                 </View>
             </View>
 
+            {/* Points fidélité */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Programme de fidélité</Text>
+                <View style={styles.pointsCard}>
+                    <Icon name="card-giftcard" size={40} color="#FF6B6B" />
+                    <View style={styles.pointsContent}>
+                        <Text style={styles.pointsLabel}>Vos points</Text>
+                        <Text style={styles.pointsValue}>{stats.points_fidelite}</Text>
+                    </View>
+                </View>
+            </View>
+
             {/* Catégories favorites */}
             {stats.categories_favorites && stats.categories_favorites.length > 0 && (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Catégories favorites</Text>
-                    
+
                     {stats.categories_favorites.map((cat, index) => (
                         <View key={index} style={styles.categoryRow}>
                             <Text style={styles.categoryName}>{cat.categorie}</Text>
                             <View style={styles.categoryBar}>
-                                <View 
+                                <View
                                     style={[
                                         styles.categoryBarFill,
-                                        { 
-                                            width: `${(cat.quantite / stats.produits_achetes * 100).toFixed(1)}%`,
-                                            backgroundColor: index === 0 ? '#FF6B6B' : 
-                                                             index === 1 ? '#4CAF50' : '#2196F3'
+                                        {
+                                            width: `${Math.min((cat.quantite / (stats.produits_achetes || 1)) * 100, 100)}%`,
+                                            backgroundColor: index === 0 ? '#FF6B6B' :
+                                                index === 1 ? '#4CAF50' : '#2196F3'
                                         }
-                                    ]} 
+                                    ]}
                                 />
                             </View>
                             <Text style={styles.categoryCount}>{cat.quantite} produits</Text>
@@ -153,39 +189,16 @@ export default function StatistiquesAchatScreen({ navigation }) {
                 </View>
             )}
 
-            {/* Habitudes d'achat */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Habitudes d'achat</Text>
-                
-                {stats.mois_plus_actif && (
-                    <View style={styles.habitCard}>
-                        <Icon name="calendar-month" size={24} color="#FF6B6B" />
-                        <View style={styles.habitContent}>
-                            <Text style={styles.habitLabel}>Mois le plus actif</Text>
-                            <Text style={styles.habitValue}>{stats.mois_plus_actif}</Text>
-                        </View>
-                    </View>
-                )}
-                
-                {stats.jour_prefere && (
-                    <View style={styles.habitCard}>
-                        <Icon name="calendar-today" size={24} color="#4CAF50" />
-                        <View style={styles.habitContent}>
-                            <Text style={styles.habitLabel}>Jour préféré</Text>
-                            <Text style={styles.habitValue}>{stats.jour_prefere}</Text>
-                        </View>
-                    </View>
-                )}
-            </View>
-
-            {/* Bouton pour voir plus de détails */}
-            <TouchableOpacity 
+            {/* Bouton pour voir l'historique */}
+            <TouchableOpacity
                 style={styles.detailsButton}
                 onPress={() => navigation.navigate('Commandes')}
             >
                 <Text style={styles.detailsButtonText}>Voir l'historique détaillé</Text>
                 <Icon name="chevron-right" size={20} color="#fff" />
             </TouchableOpacity>
+
+            <View style={styles.footer} />
         </ScrollView>
     );
 }
@@ -199,6 +212,12 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
     },
     header: {
         flexDirection: 'row',
@@ -272,6 +291,27 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
     },
+    pointsCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF6B6B10',
+        padding: 20,
+        borderRadius: 15,
+    },
+    pointsContent: {
+        marginLeft: 15,
+        flex: 1,
+    },
+    pointsLabel: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 4,
+    },
+    pointsValue: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#FF6B6B',
+    },
     categoryRow: {
         marginBottom: 15,
     },
@@ -295,35 +335,13 @@ const styles = StyleSheet.create({
         color: '#999',
         textAlign: 'right',
     },
-    habitCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f9f9f9',
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 10,
-    },
-    habitContent: {
-        marginLeft: 15,
-        flex: 1,
-    },
-    habitLabel: {
-        fontSize: 12,
-        color: '#999',
-        marginBottom: 2,
-    },
-    habitValue: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333',
-        textTransform: 'capitalize',
-    },
     detailsButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#FF6B6B',
-        margin: 20,
+        marginHorizontal: 20,
+        marginTop: 20,
         padding: 15,
         borderRadius: 10,
     },
@@ -332,5 +350,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         marginRight: 5,
+    },
+    footer: {
+        height: 30,
     },
 });

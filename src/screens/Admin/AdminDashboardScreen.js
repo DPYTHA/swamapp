@@ -47,7 +47,7 @@ export default function AdminDashboardScreen({ navigation }) {
     };
 
     // 👇 FONCTION DE DÉCONNEXION
-    const handleLogout = () => {
+    const handleLogout = async () => {
         Alert.alert(
             'Déconnexion',
             'Êtes-vous sûr de vouloir vous déconnecter ?',
@@ -56,8 +56,9 @@ export default function AdminDashboardScreen({ navigation }) {
                 {
                     text: 'Se déconnecter',
                     onPress: async () => {
-                        await logout();
-                        navigation.replace('Public');
+                        await logout(); // Nettoie le token et l'état user
+                        // ✅ Cible le navigateur racine
+                        navigation.getParent()?.replace('Public');
                     },
                     style: 'destructive'
                 }

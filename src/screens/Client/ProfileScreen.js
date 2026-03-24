@@ -196,7 +196,8 @@ export default function ProfileScreen({ navigation }) {
                 {
                     text: 'Se déconnecter',
                     onPress: async () => {
-                        await logout();
+                        await logout(); // Nettoie le token et l'état user
+                        // ✅ Cible le navigateur racine
                         navigation.getParent()?.replace('Public');
                     },
                     style: 'destructive'

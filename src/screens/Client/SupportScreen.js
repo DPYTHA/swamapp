@@ -144,12 +144,12 @@ export default function SupportScreen({ navigation }) {
 
                 <View style={styles.alternativeItem}>
                     <Icon name="phone" size={20} color="#FF6B6B" />
-                    <Text style={styles.alternativeText}>+221 33 123 45 67</Text>
+                    <Text style={styles.alternativeText}>+225 0757123619</Text>
                 </View>
 
                 <View style={styles.alternativeItem}>
                     <Icon name="email" size={20} color="#FF6B6B" />
-                    <Text style={styles.alternativeText}>support@swam.sn</Text>
+                    <Text style={styles.alternativeText}>pythacademy91@gmail.com</Text>
                 </View>
 
                 <View style={styles.alternativeItem}>
