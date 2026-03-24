@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../hooks/useAuth';
 
+
 export default function RegisterScreen({ navigation }) {
     const [nom, setNom] = useState('');
     const [telephone, setTelephone] = useState('');
