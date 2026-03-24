@@ -63,6 +63,36 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const register = async (telephone, mot_de_passe, nom = '') => {
+        try {
+            console.log('📝 Tentative inscription:', { telephone, nom });
+
+            const response = await api.post('/register', {
+                telephone,
+                mot_de_passe,
+                nom
+            });
+
+            console.log('✅ Réponse backend:', response.data);
+
+            if (response.data.token) {
+                await AsyncStorage.setItem('token', response.data.token);
+                api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+                setUser(response.data.user);
+                return { success: true, user: response.data.user };
+            }
+
+            return { success: false, message: 'Pas de token reçu' };
+
+        } catch (error) {
+            console.log('❌ Inscription échouée:', error.response?.data || error.message);
+            return {
+                success: false,
+                message: error.response?.data?.message || "Erreur d'inscription"
+            };
+        }
+    };
+
     const logout = async () => {
         console.log('🚪 Déconnexion');
         try {
