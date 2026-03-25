@@ -363,7 +363,13 @@ export default function ConfirmationScreen({ navigation, route }) {
                                     <Icon name="refresh" size={24} color="#FF6B6B" />
                                 )}
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setIsChatVisible(false)}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setIsChatVisible(false);
+                                    // Rediriger vers l'écran des commandes
+                                    navigation.replace('Commandes');
+                                }}
+                            >
                                 <Icon name="close" size={24} color="#333" />
                             </TouchableOpacity>
                         </View>
