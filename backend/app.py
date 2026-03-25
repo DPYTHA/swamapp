@@ -1472,10 +1472,17 @@ def livreur_historique_livraisons():
         'date_livraison': c.date_livraison.isoformat() if c.date_livraison else None
     } for c in commandes])
 
+# ===================== ROUTES LIVREUR - ACCEPTER LIVRAISON =====================
 @app.route('/api/livreur/commandes/<int:commande_id>/accepter', methods=['PUT'])
 @jwt_required()
 def livreur_accepter_livraison(commande_id):
     current_user_id = get_jwt_identity()
+    
+    try:
+        current_user_id = int(current_user_id)
+    except (ValueError, TypeError):
+        return jsonify({'message': 'ID utilisateur invalide'}), 400
+    
     livreur = User.query.get(current_user_id)
     
     if not livreur or livreur.role != 'livreur':
@@ -1483,17 +1490,23 @@ def livreur_accepter_livraison(commande_id):
     
     commande = Commande.query.get_or_404(commande_id)
     
+    # Vérifier que la commande n'a pas déjà de livreur
     if commande.livreur_id:
         return jsonify({'message': 'Cette commande a déjà un livreur'}), 400
     
+    # Vérifier que la commande est disponible
     if commande.statut != 'preparation':
         return jsonify({'message': 'Cette commande n\'est pas disponible'}), 400
     
+    # ✅ ASSIGNER LE LIVREUR À LA COMMANDE
     commande.livreur_id = current_user_id
-    commande.statut = 'preparation'
     commande.recherche_livreur = False
     db.session.commit()
     
+    print(f"✅ Livraison acceptée - Livreur ID: {current_user_id} assigné à la commande {commande.code_suivi}")
+    print(f"📦 Commande mise à jour - livreur_id: {commande.livreur_id}")
+    
+    # Notifier le client
     send_push_notification(
         user_id=commande.client_id,
         title="🚚 Livreur en route",
@@ -1506,23 +1519,28 @@ def livreur_accepter_livraison(commande_id):
         notification_type='order_update'
     )
     
+    # Notifier les admins
     admins = User.query.filter_by(role='admin').all()
     for admin in admins:
         send_push_notification(
             user_id=admin.id,
             title="✅ Livraison acceptée",
-            body=f"Livreur {livreur.nom or livreur.telephone} a accepté la commande {commande.code_suivi}",
+            body=f"Livreur {livreur.nom} a accepté la commande {commande.code_suivi}",
             data={
                 'type': 'order_accepted',
                 'orderId': commande.id,
                 'code': commande.code_suivi,
-                'livreur': livreur.nom or livreur.telephone
+                'livreur': livreur.nom
             },
             notification_type='admin_alert'
         )
     
-    return jsonify({'message': 'Livraison acceptée avec succès'}), 200
-
+    return jsonify({
+        'message': 'Livraison acceptée avec succès',
+        'commande_id': commande.id,
+        'code_suivi': commande.code_suivi,
+        'livreur_id': current_user_id
+    }), 200
 @app.route('/api/livreur/commandes/<int:commande_id>/statut', methods=['PUT'])
 @jwt_required()
 def livreur_update_statut(commande_id):
@@ -1594,6 +1612,51 @@ def livreur_stats():
         'livraisons_aujourdhui': livraisons_aujourdhui,
         'gains_total': gains_total,
         'note_moyenne': 4.8
+    }), 200
+
+# ===================== ROUTES LIVREUR - DÉTAILS COMMANDE =====================
+@app.route('/api/livreur/commandes/<int:commande_id>', methods=['GET'])
+@jwt_required()
+def livreur_detail_commande(commande_id):
+    current_user_id = get_jwt_identity()
+    
+    try:
+        current_user_id = int(current_user_id)
+    except (ValueError, TypeError):
+        return jsonify({'message': 'ID utilisateur invalide'}), 400
+    
+    livreur = User.query.get(current_user_id)
+    if not livreur or livreur.role != 'livreur':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.get_or_404(commande_id)
+    
+    # Vérifier que le livreur a le droit de voir cette commande
+    if commande.livreur_id != current_user_id:
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    articles = []
+    for detail in commande.details:
+        articles.append({
+            'nom': detail.produit.nom,
+            'quantite': detail.quantite,
+            'prix': detail.prix_unitaire
+        })
+    
+    return jsonify({
+        'id': commande.id,
+        'code_suivi': commande.code_suivi,
+        'client': {
+            'nom': commande.client.nom or 'Client',
+            'telephone': commande.client.telephone
+        },
+        'adresse': commande.adresse_livraison,
+        'statut': commande.statut,
+        'distance': commande.distance,
+        'frais_livraison': commande.frais_livraison,
+        'total': commande.total,
+        'articles': articles,
+        'date_commande': commande.date_commande.isoformat() if commande.date_commande else None
     }), 200
 
 # ===================== ROUTES ADRESSES =====================
