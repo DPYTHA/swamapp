@@ -739,6 +739,172 @@ def get_all_commandes():
     
     return jsonify(result)
 
+# ===================== ROUTES ADMIN STATS =====================
+@app.route('/api/admin/stats', methods=['GET'])
+@jwt_required()
+def get_admin_stats():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    total_commandes = Commande.query.count()
+    commandes_en_attente = Commande.query.filter_by(statut='en_attente_paiement').count()
+    paiements_en_attente = Paiement.query.filter_by(statut='en_attente').count()
+    total_clients = User.query.filter_by(role='client').count()
+    total_livreurs = User.query.filter_by(role='livreur').count()
+    commandes_aujourdhui = Commande.query.filter(
+        Commande.date_commande >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    ).count()
+    
+    # Chiffre d'affaires du mois
+    debut_mois = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    commandes_mois = Commande.query.filter(Commande.date_commande >= debut_mois).all()
+    chiffre_affaires_mois = sum(c.total for c in commandes_mois)
+    
+    return jsonify({
+        'total_commandes': total_commandes,
+        'commandes_en_attente': commandes_en_attente,
+        'paiements_en_attente': paiements_en_attente,
+        'total_clients': total_clients,
+        'total_livreurs': total_livreurs,
+        'commandes_aujourdhui': commandes_aujourdhui,
+        'chiffre_affaires_mois': chiffre_affaires_mois
+    }), 200
+
+# ===================== ROUTES ADMIN LIVREURS =====================
+@app.route('/api/admin/livreurs', methods=['GET'])
+@jwt_required()
+def get_all_livreurs():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    livreurs = User.query.filter_by(role='livreur').all()
+    
+    return jsonify([{
+        'id': l.id,
+        'nom': l.nom,
+        'telephone': l.telephone,
+        'date_inscription': l.date_inscription.isoformat() if l.date_inscription else None,
+        'statut': 'disponible'  # À calculer selon les commandes en cours
+    } for l in livreurs]), 200
+
+# ===================== ROUTES ADMIN STATS DÉTAILLÉES =====================
+@app.route('/api/admin/stats/detailed', methods=['GET'])
+@jwt_required()
+def get_admin_stats_detailed():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    period = request.args.get('period', 'week')
+    
+    maintenant = datetime.now(timezone.utc)
+    if period == 'week':
+        debut = maintenant - timedelta(days=7)
+    elif period == 'month':
+        debut = maintenant - timedelta(days=30)
+    else:
+        debut = maintenant - timedelta(days=365)
+    
+    commandes = Commande.query.filter(Commande.date_commande >= debut).all()
+    
+    total_commandes = len(commandes)
+    nouveaux_clients = User.query.filter(User.date_inscription >= debut, User.role == 'client').count()
+    
+    produits_vendus = 0
+    ventes_par_categorie = {}
+    top_produits = {}
+    
+    for cmd in commandes:
+        for detail in cmd.details:
+            produits_vendus += detail.quantite
+            if detail.produit:
+                cat = detail.produit.categorie
+                ventes_par_categorie[cat] = ventes_par_categorie.get(cat, 0) + detail.quantite
+                
+                if detail.produit.nom in top_produits:
+                    top_produits[detail.produit.nom]['total'] += detail.quantite
+                else:
+                    top_produits[detail.produit.nom] = {
+                        'nom': detail.produit.nom,
+                        'total': detail.quantite,
+                        'prix': detail.produit.prix
+                    }
+    
+    chiffre_affaires = sum(c.total for c in commandes)
+    
+    # Commandes par jour
+    commandes_par_jour = []
+    for i in range(7):
+        jour = (maintenant - timedelta(days=6-i)).date()
+        count = sum(1 for c in commandes if c.date_commande and c.date_commande.date() == jour)
+        commandes_par_jour.append({'jour': jour.strftime('%a')[:3], 'count': count})
+    
+    max_commandes = max([c['count'] for c in commandes_par_jour]) if commandes_par_jour else 10
+    
+    # Top 5 produits
+    top_5 = sorted(top_produits.values(), key=lambda x: x['total'], reverse=True)[:5]
+    
+    # Livraisons
+    livraisons_terminees = [c for c in commandes if c.date_livraison]
+    temps_moyen = 0
+    distance_moyenne = 0
+    frais_moyens = 0
+    
+    if livraisons_terminees:
+        temps_total = sum((c.date_livraison - c.date_commande).total_seconds() / 60 for c in livraisons_terminees)
+        temps_moyen = round(temps_total / len(livraisons_terminees))
+        distance_moyenne = round(sum(c.distance for c in livraisons_terminees) / len(livraisons_terminees) / 1000, 1)
+        frais_moyens = sum(c.frais_livraison for c in livraisons_terminees) / len(livraisons_terminees)
+    
+    livreurs_actifs = Commande.query.filter(
+        Commande.livreur_id.isnot(None),
+        Commande.date_commande >= debut
+    ).distinct(Commande.livreur_id).count()
+    
+    frais_livraison_total = sum(c.frais_livraison for c in commandes)
+    reductions_total = sum(abs(c.reduction) for c in commandes)
+    
+    # Ventes par catégorie formatée
+    categories_list = [
+        {'nom': cat, 'total': ventes_par_categorie.get(cat, 0)} 
+        for cat in ['Ingrédients', 'Boissons', 'Poissons']
+    ]
+    
+    return jsonify({
+        'total_commandes': total_commandes,
+        'nouveaux_clients': nouveaux_clients,
+        'produits_vendus': produits_vendus,
+        'chiffre_affaires': chiffre_affaires,
+        'commandes_par_jour': commandes_par_jour,
+        'max_commandes': max_commandes,
+        'ventes_par_categorie': categories_list,
+        'total_articles': produits_vendus or 1,
+        'top_produits': top_5,
+        'livraisons': {
+            'moyenne': temps_moyen,
+            'distance_moyenne': distance_moyenne,
+            'frais_moyens': round(frais_moyens, 2),
+            'livreurs_actifs': livreurs_actifs
+        },
+        'revenus': {
+            'total': chiffre_affaires,
+            'frais_livraison': frais_livraison_total,
+            'reduction': reductions_total
+        },
+        'satisfaction': {
+            'moyenne': 4.8,
+            'total_avis': 0
+        }
+    }), 200
+
 @app.route('/api/admin/commandes/<string:code_suivi>', methods=['GET'])
 @jwt_required()
 def get_admin_commande_detail(code_suivi):
