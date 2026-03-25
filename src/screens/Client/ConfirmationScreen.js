@@ -366,8 +366,8 @@ export default function ConfirmationScreen({ navigation, route }) {
                             <TouchableOpacity
                                 onPress={() => {
                                     setIsChatVisible(false);
-                                    // Rediriger vers l'écran des commandes
-                                    navigation.replace('Commandes');
+
+                                    navigation.getParent()?.replace('OrderDetail');
                                 }}
                             >
                                 <Icon name="close" size={24} color="#333" />
