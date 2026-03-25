@@ -774,6 +774,7 @@ def get_admin_stats():
     }), 200
 
 # ===================== ROUTES ADMIN LIVREURS =====================
+# GET /api/admin/livreurs - Liste tous les livreurs
 @app.route('/api/admin/livreurs', methods=['GET'])
 @jwt_required()
 def get_all_livreurs():
@@ -785,14 +786,316 @@ def get_all_livreurs():
     
     livreurs = User.query.filter_by(role='livreur').all()
     
+    result = []
+    for l in livreurs:
+        # Vérifier si le livreur est occupé
+        commande_active = Commande.query.filter(
+            Commande.livreur_id == l.id,
+            Commande.statut.in_(['preparation', 'livraison'])
+        ).first()
+        
+        statut = 'occupé' if commande_active else 'disponible'
+        
+        result.append({
+            'id': l.id,
+            'nom': l.nom or 'Livreur',
+            'telephone': l.telephone,
+            'statut': statut,
+            'date_inscription': l.date_inscription.isoformat() if l.date_inscription else None
+        })
+    
+    return jsonify(result), 200
+
+
+# GET /api/admin/livreurs-disponibles - Liste des livreurs disponibles
+@app.route('/api/admin/livreurs-disponibles', methods=['GET'])
+@jwt_required()
+def get_livreurs_disponibles():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    livreurs = User.query.filter_by(role='livreur').all()
+    
+    result = []
+    for l in livreurs:
+        commande_active = Commande.query.filter(
+            Commande.livreur_id == l.id,
+            Commande.statut.in_(['preparation', 'livraison'])
+        ).first()
+        
+        if not commande_active:
+            result.append({
+                'id': l.id,
+                'nom': l.nom or 'Livreur',
+                'telephone': l.telephone,
+                'note': 4.8,
+                'livraisons_aujourdhui': 0
+            })
+    
+    return jsonify(result), 200
+
+# GET /api/admin/commandes-en-attente-livreur - Commandes en attente de livreur
+@app.route('/api/admin/commandes-en-attente-livreur', methods=['GET'])
+@jwt_required()
+def get_commandes_attente_livreur():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commandes = Commande.query.filter_by(
+        statut='preparation',
+        livreur_id=None,
+        recherche_livreur=True
+    ).order_by(Commande.date_recherche.desc()).all()
+    
+    result = []
+    for c in commandes:
+        result.append({
+            'id': c.id,
+            'code_suivi': c.code_suivi,
+            'client': {
+                'nom': c.client.nom or 'Client',
+                'telephone': c.client.telephone
+            },
+            'adresse': c.adresse_livraison,
+            'total': c.total,
+            'distance': c.distance,
+            'frais_livraison': c.frais_livraison,
+            'date_commande': c.date_commande.isoformat() if c.date_commande else None,
+            'gain_livreur': c.frais_livraison * 0.6
+        })
+    
+    return jsonify(result), 200
+
+# POST /api/admin/commandes/<commande_id>/rechercher-livreur - Lancer la recherche de livreur
+@app.route('/api/admin/commandes/<int:commande_id>/rechercher-livreur', methods=['POST'])
+@jwt_required()
+def rechercher_livreur(commande_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.get_or_404(commande_id)
+    
+    if commande.livreur_id:
+        return jsonify({'message': 'Cette commande a déjà un livreur'}), 400
+    
+    commande.recherche_livreur = True
+    commande.date_recherche = datetime.now(timezone.utc)
+    db.session.commit()
+    
+    print(f"\n🔍 Recherche de livreur lancée pour la commande {commande.code_suivi}")
+    
+    livreurs = User.query.filter_by(role='livreur').all()
+    notifications_envoyees = 0
+    
+    for livreur in livreurs:
+        commande_active = Commande.query.filter(
+            Commande.livreur_id == livreur.id,
+            Commande.statut.in_(['preparation', 'livraison'])
+        ).first()
+        
+        if not commande_active:
+            gain = commande.frais_livraison * 0.6
+            
+            success = send_push_notification(
+                user_id=livreur.id,
+                title="🚚 Nouvelle livraison disponible",
+                body=f"Commande {commande.code_suivi} - Gain: {gain:.0f} FCFA",
+                data={
+                    'type': 'livreur_order_available',
+                    'orderId': commande.id,
+                    'code': commande.code_suivi,
+                    'gain': gain,
+                    'distance': commande.distance,
+                    'adresse': commande.adresse_livraison
+                },
+                notification_type='new_orders'
+            )
+            
+            if success:
+                notifications_envoyees += 1
+                commande.notifications_envoyees += 1
+                db.session.commit()
+    
+    print(f"📨 {notifications_envoyees} notification(s) envoyée(s)")
+    
+    return jsonify({
+        'message': 'Recherche de livreur lancée',
+        'notifications_envoyees': notifications_envoyees,
+        'livreurs_disponibles': notifications_envoyees
+    }), 200
+
+# POST /api/admin/commandes/<commande_id>/assigner-livreur - Assigner un livreur à une commande
+@app.route('/api/admin/commandes/<int:commande_id>/assigner-livreur', methods=['POST'])
+@jwt_required()
+def assigner_livreur(commande_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    data = request.get_json()
+    livreur_id = data.get('livreur_id')
+    
+    if not livreur_id:
+        return jsonify({'message': 'ID livreur requis'}), 400
+    
+    commande = Commande.query.get_or_404(commande_id)
+    livreur = User.query.get_or_404(livreur_id)
+    
+    if livreur.role != 'livreur':
+        return jsonify({'message': 'L\'utilisateur n\'est pas un livreur'}), 400
+    
+    if commande.livreur_id:
+        return jsonify({'message': 'Cette commande a déjà un livreur assigné'}), 400
+    
+    commande.livreur_id = livreur_id
+    commande.recherche_livreur = False
+    db.session.commit()
+    
+    gain = commande.frais_livraison * 0.6
+    
+    # Notifier le livreur
+    send_push_notification(
+        user_id=livreur_id,
+        title="🚚 Nouvelle livraison assignée",
+        body=f"Vous avez été assigné à la commande {commande.code_suivi} - Gain: {gain:.0f} FCFA",
+        data={
+            'type': 'driver_assigned',
+            'orderId': commande.id,
+            'code': commande.code_suivi,
+            'gain': gain
+        },
+        notification_type='assignment'
+    )
+    
+    # Notifier le client
+    send_push_notification(
+        user_id=commande.client_id,
+        title="🚚 Livreur assigné",
+        body=f"Un livreur a été assigné à votre commande {commande.code_suivi}",
+        data={
+            'type': 'driver_assigned',
+            'orderId': commande.id,
+            'code': commande.code_suivi
+        },
+        notification_type='order_update'
+    )
+    
+    return jsonify({
+        'message': f'Livreur {livreur.nom} assigné avec succès',
+        'livreur': {
+            'id': livreur.id,
+            'nom': livreur.nom,
+            'telephone': livreur.telephone
+        }
+    }), 200
+
+# GET /api/admin/livreurs/<livreur_id> - Détails d'un livreur
+@app.route('/api/admin/livreurs/<int:livreur_id>', methods=['GET'])
+@jwt_required()
+def get_livreur_details(livreur_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    livreur = User.query.filter_by(id=livreur_id, role='livreur').first()
+    if not livreur:
+        return jsonify({'message': 'Livreur non trouvé'}), 404
+    
+    return jsonify({
+        'id': livreur.id,
+        'nom': livreur.nom,
+        'telephone': livreur.telephone,
+        'date_inscription': livreur.date_inscription.isoformat() if livreur.date_inscription else None
+    }), 200
+
+# GET /api/admin/livreurs/<livreur_id>/commandes - Commandes d'un livreur
+@app.route('/api/admin/livreurs/<int:livreur_id>/commandes', methods=['GET'])
+@jwt_required()
+def get_livreur_commandes(livreur_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commandes = Commande.query.filter_by(livreur_id=livreur_id).order_by(Commande.date_commande.desc()).all()
+    
+    result = []
+    for cmd in commandes:
+        result.append({
+            'id': cmd.id,
+            'code_suivi': cmd.code_suivi,
+            'statut': cmd.statut,
+            'total': cmd.total,
+            'frais_livraison': cmd.frais_livraison,
+            'adresse_livraison': cmd.adresse_livraison,
+            'date_commande': cmd.date_commande.isoformat() if cmd.date_commande else None,
+            'client': {
+                'nom': cmd.client.nom,
+                'telephone': cmd.client.telephone
+            }
+        })
+    
+    return jsonify(result), 200
+
+# GET /api/admin/livreurs-en-attente - Livreurs en attente de validation
+@app.route('/api/admin/livreurs-en-attente', methods=['GET'])
+@jwt_required()
+def get_livreurs_en_attente():
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    livreurs = User.query.filter_by(role='livreur_en_attente').all()
+    
     return jsonify([{
         'id': l.id,
         'nom': l.nom,
         'telephone': l.telephone,
-        'date_inscription': l.date_inscription.isoformat() if l.date_inscription else None,
-        'statut': 'disponible'  # À calculer selon les commandes en cours
+        'date_inscription': l.date_inscription.isoformat() if l.date_inscription else None
     } for l in livreurs]), 200
 
+# PUT /api/admin/livreurs/<livreur_id>/valider - Valider un livreur
+@app.route('/api/admin/livreurs/<int:livreur_id>/valider', methods=['PUT'])
+@jwt_required()
+def valider_livreur(livreur_id):
+    current_user_id = get_jwt_identity()
+    admin = User.query.get(current_user_id)
+    
+    if not admin or admin.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    livreur = User.query.get_or_404(livreur_id)
+    livreur.role = 'livreur'
+    db.session.commit()
+    
+    # Notifier le livreur
+    send_push_notification(
+        user_id=livreur_id,
+        title="✅ Compte validé",
+        body="Félicitations ! Votre compte livreur a été validé. Vous pouvez maintenant recevoir des livraisons.",
+        data={
+            'type': 'account_validated'
+        },
+        notification_type='account'
+    )
+    
+    return jsonify({'message': 'Livreur validé avec succès'}), 200
 # ===================== ROUTES ADMIN STATS DÉTAILLÉES =====================
 @app.route('/api/admin/stats/detailed', methods=['GET'])
 @jwt_required()

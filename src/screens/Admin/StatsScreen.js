@@ -24,6 +24,7 @@ export default function StatsScreen({ navigation }) {
         commandes_aujourdhui: 0,
         chiffre_affaires_mois: 0
     });
+    const [detailedStats, setDetailedStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
@@ -31,19 +32,24 @@ export default function StatsScreen({ navigation }) {
 
     useEffect(() => {
         loadStats();
+        loadDetailedStats();
     }, [period]);
 
     const loadStats = async () => {
         try {
-            setError(null);
-            // Essayer de charger les stats
-            const response = await api.get(`/admin/stats?period=${period}`);
-            console.log('📊 Stats reçues:', response.data);
+            const response = await api.get('/admin/stats');
             setStats(response.data);
         } catch (error) {
             console.log('❌ Erreur chargement stats:', error.response?.data || error.message);
-            setError(error.response?.data?.message || 'Impossible de charger les statistiques');
-            // Garder les valeurs par défaut
+        }
+    };
+
+    const loadDetailedStats = async () => {
+        try {
+            const response = await api.get(`/admin/stats/detailed?period=${period}`);
+            setDetailedStats(response.data);
+        } catch (error) {
+            console.log('❌ Erreur chargement stats détaillées:', error.response?.data || error.message);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -52,7 +58,7 @@ export default function StatsScreen({ navigation }) {
 
     const onRefresh = () => {
         setRefreshing(true);
-        loadStats();
+        Promise.all([loadStats(), loadDetailedStats()]);
     };
 
     const formatMoney = (amount) => {
@@ -60,35 +66,28 @@ export default function StatsScreen({ navigation }) {
         return Math.round(amount).toLocaleString() + ' FCFA';
     };
 
-    // Données de démonstration pour l'évolution des commandes
-    const chartData = {
-        week: [
-            { jour: 'Lun', count: 12 },
-            { jour: 'Mar', count: 18 },
-            { jour: 'Mer', count: 15 },
-            { jour: 'Jeu', count: 22 },
-            { jour: 'Ven', count: 28 },
-            { jour: 'Sam', count: 35 },
-            { jour: 'Dim', count: 20 },
-        ],
-        month: [
-            { jour: 'Sem 1', count: 45 },
-            { jour: 'Sem 2', count: 52 },
-            { jour: 'Sem 3', count: 48 },
-            { jour: 'Sem 4', count: 65 },
-        ],
-        year: [
-            { jour: 'Jan', count: 120 },
-            { jour: 'Fév', count: 135 },
-            { jour: 'Mar', count: 148 },
-            { jour: 'Avr', count: 162 },
-            { jour: 'Mai', count: 178 },
-            { jour: 'Juin', count: 190 },
-        ],
+    const safeDetailedStats = detailedStats || {
+        commandes_par_jour: [],
+        max_commandes: 10,
+        ventes_par_categorie: [],
+        total_articles: 1,
+        top_produits: [],
+        livraisons: {
+            moyenne: 0,
+            distance_moyenne: 0,
+            frais_moyens: 0,
+            livreurs_actifs: 0
+        },
+        revenus: {
+            total: 0,
+            frais_livraison: 0,
+            reduction: 0
+        },
+        satisfaction: {
+            moyenne: 4.8,
+            total_avis: 0
+        }
     };
-
-    const currentChartData = chartData[period] || chartData.week;
-    const maxCount = Math.max(...currentChartData.map(d => d.count), 1);
 
     if (loading) {
         return (
@@ -110,6 +109,9 @@ export default function StatsScreen({ navigation }) {
             </View>
         );
     }
+
+    const chartData = safeDetailedStats.commandes_par_jour || [];
+    const maxCount = Math.max(...chartData.map(d => d.count), 1);
 
     return (
         <ScrollView
@@ -220,92 +222,90 @@ export default function StatsScreen({ navigation }) {
             </View>
 
             {/* Graphique des commandes */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Évolution des commandes</Text>
-                <View style={styles.chartContainer}>
-                    {currentChartData.map((item, index) => (
-                        <View key={index} style={styles.chartBarContainer}>
-                            <View style={styles.chartBarWrapper}>
-                                <View
-                                    style={[
-                                        styles.chartBar,
-                                        {
-                                            height: Math.max(20, (item.count / maxCount) * 120),
-                                            backgroundColor: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#2196F3', '#4CAF50', '#FF9800', '#9C27B0'][index % 7]
-                                        }
-                                    ]}
-                                />
-                                <Text style={styles.chartValue}>{item.count}</Text>
+            {chartData.length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Évolution des commandes</Text>
+                    <View style={styles.chartContainer}>
+                        {chartData.map((item, index) => (
+                            <View key={index} style={styles.chartBarContainer}>
+                                <View style={styles.chartBarWrapper}>
+                                    <View
+                                        style={[
+                                            styles.chartBar,
+                                            {
+                                                height: Math.max(20, (item.count / maxCount) * 120),
+                                                backgroundColor: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#2196F3', '#4CAF50', '#FF9800', '#9C27B0'][index % 7]
+                                            }
+                                        ]}
+                                    />
+                                    <Text style={styles.chartValue}>{item.count}</Text>
+                                </View>
+                                <Text style={styles.chartLabel}>{item.jour}</Text>
                             </View>
-                            <Text style={styles.chartLabel}>{item.jour}</Text>
+                        ))}
+                    </View>
+                </View>
+            )}
+
+            {/* Ventes par catégorie */}
+            {safeDetailedStats.ventes_par_categorie && safeDetailedStats.ventes_par_categorie.length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Ventes par catégorie</Text>
+                    <View style={styles.categoryStats}>
+                        {safeDetailedStats.ventes_par_categorie.map((cat, index) => {
+                            const percentage = safeDetailedStats.total_articles > 0
+                                ? (cat.total / safeDetailedStats.total_articles) * 100
+                                : 0;
+                            const colors = ['#FF6B6B', '#4ECDC4', '#FFE66D'];
+                            return (
+                                <View key={index} style={styles.categoryRow}>
+                                    <View style={styles.categoryInfo}>
+                                        <Text style={styles.categoryName}>{cat.nom}</Text>
+                                        <Text style={styles.categoryCount}>{cat.total} articles</Text>
+                                    </View>
+                                    <View style={styles.categoryBarContainer}>
+                                        <View
+                                            style={[
+                                                styles.categoryBar,
+                                                {
+                                                    width: `${Math.min(percentage, 100)}%`,
+                                                    backgroundColor: colors[index % colors.length]
+                                                }
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text style={styles.categoryPercentage}>
+                                        {Math.round(percentage)}%
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+            )}
+
+            {/* Top produits */}
+            {safeDetailedStats.top_produits && safeDetailedStats.top_produits.length > 0 && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Top 5 des produits</Text>
+                    {safeDetailedStats.top_produits.map((produit, index) => (
+                        <View key={index} style={styles.topProductRow}>
+                            <View style={[styles.topProductRank, { backgroundColor: '#FF6B6B20' }]}>
+                                <Text style={[styles.topProductRankText, { color: '#FF6B6B' }]}>
+                                    {index + 1}
+                                </Text>
+                            </View>
+                            <View style={styles.topProductInfo}>
+                                <Text style={styles.topProductName}>{produit.nom}</Text>
+                                <Text style={styles.topProductCount}>{produit.total} vendus</Text>
+                            </View>
+                            <Text style={styles.topProductRevenue}>
+                                {formatMoney(produit.prix * produit.total)}
+                            </Text>
                         </View>
                     ))}
                 </View>
-            </View>
-
-            {/* Ventes par catégorie (simulé) */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Ventes par catégorie</Text>
-                <View style={styles.categoryStats}>
-                    <View style={styles.categoryRow}>
-                        <View style={styles.categoryInfo}>
-                            <Text style={styles.categoryName}>Ingrédients</Text>
-                            <Text style={styles.categoryCount}>156 articles</Text>
-                        </View>
-                        <View style={styles.categoryBarContainer}>
-                            <View style={[styles.categoryBar, { width: '65%', backgroundColor: '#FF6B6B' }]} />
-                        </View>
-                        <Text style={styles.categoryPercentage}>65%</Text>
-                    </View>
-                    <View style={styles.categoryRow}>
-                        <View style={styles.categoryInfo}>
-                            <Text style={styles.categoryName}>Boissons</Text>
-                            <Text style={styles.categoryCount}>89 articles</Text>
-                        </View>
-                        <View style={styles.categoryBarContainer}>
-                            <View style={[styles.categoryBar, { width: '37%', backgroundColor: '#4ECDC4' }]} />
-                        </View>
-                        <Text style={styles.categoryPercentage}>37%</Text>
-                    </View>
-                    <View style={styles.categoryRow}>
-                        <View style={styles.categoryInfo}>
-                            <Text style={styles.categoryName}>Poissons</Text>
-                            <Text style={styles.categoryCount}>72 articles</Text>
-                        </View>
-                        <View style={styles.categoryBarContainer}>
-                            <View style={[styles.categoryBar, { width: '30%', backgroundColor: '#FFE66D' }]} />
-                        </View>
-                        <Text style={styles.categoryPercentage}>30%</Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* Top produits (simulé) */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Top 5 des produits</Text>
-                {[
-                    { nom: 'Riz parfumé', total: 45, prix: 3500 },
-                    { nom: 'Jus de Bissap', total: 38, prix: 1000 },
-                    { nom: 'Huile Arachide', total: 32, prix: 2500 },
-                    { nom: 'Marlin fumé', total: 28, prix: 4500 },
-                    { nom: 'Thiakry', total: 25, prix: 1500 },
-                ].map((produit, index) => (
-                    <View key={index} style={styles.topProductRow}>
-                        <View style={[styles.topProductRank, { backgroundColor: '#FF6B6B20' }]}>
-                            <Text style={[styles.topProductRankText, { color: '#FF6B6B' }]}>
-                                {index + 1}
-                            </Text>
-                        </View>
-                        <View style={styles.topProductInfo}>
-                            <Text style={styles.topProductName}>{produit.nom}</Text>
-                            <Text style={styles.topProductCount}>{produit.total} vendus</Text>
-                        </View>
-                        <Text style={styles.topProductRevenue}>
-                            {formatMoney(produit.prix * produit.total)}
-                        </Text>
-                    </View>
-                ))}
-            </View>
+            )}
 
             {/* Statistiques de livraison */}
             <View style={styles.section}>
@@ -313,23 +313,42 @@ export default function StatsScreen({ navigation }) {
                 <View style={styles.deliveryGrid}>
                     <View style={styles.deliveryCard}>
                         <Icon name="access-time" size={24} color="#FF6B6B" />
-                        <Text style={styles.deliveryStatNumber}>45 min</Text>
+                        <Text style={styles.deliveryStatNumber}>{safeDetailedStats.livraisons?.moyenne || 0} min</Text>
                         <Text style={styles.deliveryStatLabel}>Temps moyen</Text>
                     </View>
                     <View style={styles.deliveryCard}>
                         <Icon name="straighten" size={24} color="#4ECDC4" />
-                        <Text style={styles.deliveryStatNumber}>8.5 km</Text>
+                        <Text style={styles.deliveryStatNumber}>{safeDetailedStats.livraisons?.distance_moyenne || 0} km</Text>
                         <Text style={styles.deliveryStatLabel}>Distance moyenne</Text>
                     </View>
                     <View style={styles.deliveryCard}>
                         <Icon name="payments" size={24} color="#4CAF50" />
-                        <Text style={styles.deliveryStatNumber}>1 250 FCFA</Text>
+                        <Text style={styles.deliveryStatNumber}>{formatMoney(safeDetailedStats.livraisons?.frais_moyens)}</Text>
                         <Text style={styles.deliveryStatLabel}>Frais moyens</Text>
                     </View>
                     <View style={styles.deliveryCard}>
                         <Icon name="local-shipping" size={24} color="#FF9800" />
-                        <Text style={styles.deliveryStatNumber}>8</Text>
+                        <Text style={styles.deliveryStatNumber}>{safeDetailedStats.livraisons?.livreurs_actifs || 0}</Text>
                         <Text style={styles.deliveryStatLabel}>Livreurs actifs</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* Revenus détaillés */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Revenus détaillés</Text>
+                <View style={styles.revenueCard}>
+                    <View style={styles.revenueRow}>
+                        <Text style={styles.revenueLabel}>Chiffre d'affaires total</Text>
+                        <Text style={styles.revenueValue}>{formatMoney(safeDetailedStats.revenus?.total || stats.chiffre_affaires_mois)}</Text>
+                    </View>
+                    <View style={styles.revenueRow}>
+                        <Text style={styles.revenueLabel}>Dont frais de livraison</Text>
+                        <Text style={styles.revenueSubValue}>{formatMoney(safeDetailedStats.revenus?.frais_livraison)}</Text>
+                    </View>
+                    <View style={styles.revenueRow}>
+                        <Text style={styles.revenueLabel}>Dont réductions</Text>
+                        <Text style={styles.revenueSubValue}>- {formatMoney(safeDetailedStats.revenus?.reduction)}</Text>
                     </View>
                 </View>
             </View>
@@ -339,13 +358,18 @@ export default function StatsScreen({ navigation }) {
                 <Text style={styles.sectionTitle}>Satisfaction client</Text>
                 <View style={styles.satisfactionCard}>
                     <View style={styles.ratingContainer}>
-                        <Text style={styles.ratingNumber}>4.8</Text>
+                        <Text style={styles.ratingNumber}>{safeDetailedStats.satisfaction?.moyenne?.toFixed(1) || '4.8'}</Text>
                         <View style={styles.starsContainer}>
                             {[1, 2, 3, 4, 5].map((star) => (
-                                <Icon key={star} name="star" size={20} color={star <= 4 ? '#FFD700' : '#ccc'} />
+                                <Icon
+                                    key={star}
+                                    name="star"
+                                    size={20}
+                                    color={star <= Math.round(safeDetailedStats.satisfaction?.moyenne || 4.8) ? '#FFD700' : '#ccc'}
+                                />
                             ))}
                         </View>
-                        <Text style={styles.ratingCount}>156 avis</Text>
+                        <Text style={styles.ratingCount}>{safeDetailedStats.satisfaction?.total_avis || 0} avis</Text>
                     </View>
                 </View>
             </View>
@@ -633,6 +657,29 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#666',
         textAlign: 'center',
+    },
+    revenueCard: {
+        backgroundColor: '#F8F9FA',
+        padding: 15,
+        borderRadius: 10,
+    },
+    revenueRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    revenueLabel: {
+        fontSize: 13,
+        color: '#666',
+    },
+    revenueValue: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    revenueSubValue: {
+        fontSize: 13,
+        color: '#333',
     },
     satisfactionCard: {
         backgroundColor: '#F8F9FA',

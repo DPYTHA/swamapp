@@ -399,8 +399,8 @@ export default function ConfirmationScreen({ navigation, route }) {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-    scrollContent: { paddingBottom: 30 },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginTop: 30 },
+    scrollContent: { paddingBottom: 35 },
     iconContainer: { alignItems: 'center', marginTop: 20, marginBottom: 10 },
     checkCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#4CAF50', justifyContent: 'center', alignItems: 'center' },
     title: { fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 20 },
