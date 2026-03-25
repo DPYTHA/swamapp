@@ -367,7 +367,7 @@ export default function ConfirmationScreen({ navigation, route }) {
                                 onPress={() => {
                                     setIsChatVisible(false);
 
-                                    navigation.getParent()?.replace('OrderDetail');
+                                    navigation.getParent()?.replace('Commandes');
                                 }}
                             >
                                 <Icon name="close" size={24} color="#333" />
