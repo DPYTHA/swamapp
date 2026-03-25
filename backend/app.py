@@ -1473,6 +1473,7 @@ def livreur_historique_livraisons():
     } for c in commandes])
 
 # ===================== ROUTES LIVREUR - ACCEPTER LIVRAISON =====================
+# ===================== ROUTES LIVREUR - ACCEPTER LIVRAISON (CORRIGÉE) =====================
 @app.route('/api/livreur/commandes/<int:commande_id>/accepter', methods=['PUT'])
 @jwt_required()
 def livreur_accepter_livraison(commande_id):
@@ -1490,8 +1491,13 @@ def livreur_accepter_livraison(commande_id):
     
     commande = Commande.query.get_or_404(commande_id)
     
+    # 🔍 LOGS POUR DÉBOGUER
+    print(f"🔍 Tentative d'acceptation par livreur ID: {current_user_id}")
+    print(f"📦 Commande ID: {commande_id}, Code: {commande.code_suivi}")
+    print(f"📦 Livreur actuel: {commande.livreur_id}, Statut: {commande.statut}")
+    
     # Vérifier que la commande n'a pas déjà de livreur
-    if commande.livreur_id:
+    if commande.livreur_id is not None and commande.livreur_id > 0:
         return jsonify({'message': 'Cette commande a déjà un livreur'}), 400
     
     # Vérifier que la commande est disponible
@@ -1500,40 +1506,10 @@ def livreur_accepter_livraison(commande_id):
     
     # ✅ ASSIGNER LE LIVREUR À LA COMMANDE
     commande.livreur_id = current_user_id
-    commande.recherche_livreur = False
     db.session.commit()
     
-    print(f"✅ Livraison acceptée - Livreur ID: {current_user_id} assigné à la commande {commande.code_suivi}")
-    print(f"📦 Commande mise à jour - livreur_id: {commande.livreur_id}")
-    
-    # Notifier le client
-    send_push_notification(
-        user_id=commande.client_id,
-        title="🚚 Livreur en route",
-        body=f"Un livreur a accepté votre commande {commande.code_suivi}",
-        data={
-            'type': 'driver_assigned',
-            'orderId': commande.id,
-            'code': commande.code_suivi
-        },
-        notification_type='order_update'
-    )
-    
-    # Notifier les admins
-    admins = User.query.filter_by(role='admin').all()
-    for admin in admins:
-        send_push_notification(
-            user_id=admin.id,
-            title="✅ Livraison acceptée",
-            body=f"Livreur {livreur.nom} a accepté la commande {commande.code_suivi}",
-            data={
-                'type': 'order_accepted',
-                'orderId': commande.id,
-                'code': commande.code_suivi,
-                'livreur': livreur.nom
-            },
-            notification_type='admin_alert'
-        )
+    # 🔍 VÉRIFICATION APRÈS SAUVEGARDE
+    print(f"✅ Après sauvegarde - livreur_id: {commande.livreur_id}")
     
     return jsonify({
         'message': 'Livraison acceptée avec succès',
@@ -1541,16 +1517,25 @@ def livreur_accepter_livraison(commande_id):
         'code_suivi': commande.code_suivi,
         'livreur_id': current_user_id
     }), 200
+# ===================== ROUTES LIVREUR - MISE À JOUR STATUT =====================
 @app.route('/api/livreur/commandes/<int:commande_id>/statut', methods=['PUT'])
 @jwt_required()
 def livreur_update_statut(commande_id):
     current_user_id = get_jwt_identity()
-    livreur = User.query.get(current_user_id)
     
+    try:
+        current_user_id = int(current_user_id)
+    except (ValueError, TypeError):
+        return jsonify({'message': 'ID utilisateur invalide'}), 400
+    
+    livreur = User.query.get(current_user_id)
     if not livreur or livreur.role != 'livreur':
         return jsonify({'message': 'Accès non autorisé'}), 403
     
     commande = Commande.query.get_or_404(commande_id)
+    
+    # Vérifier que le livreur est bien assigné à cette commande
+    print(f"🔍 Vérification - Livreur ID: {current_user_id}, Commande livreur_id: {commande.livreur_id}")
     
     if commande.livreur_id != current_user_id:
         return jsonify({'message': 'Cette commande ne vous est pas assignée'}), 403
@@ -1563,10 +1548,13 @@ def livreur_update_statut(commande_id):
     if nouveau_statut not in ['livraison', 'livree']:
         return jsonify({'message': 'Statut invalide'}), 400
     
+    ancien_statut = commande.statut
     commande.statut = nouveau_statut
     
     if nouveau_statut == 'livree':
         commande.date_livraison = datetime.now(timezone.utc)
+        
+        # Notifier le client
         send_push_notification(
             user_id=commande.client_id,
             title="✅ Commande livrée",
@@ -1581,6 +1569,8 @@ def livreur_update_statut(commande_id):
     
     db.session.commit()
     
+    print(f"✅ Statut mis à jour: commande {commande.code_suivi} - {ancien_statut} -> {nouveau_statut}")
+    
     return jsonify({
         'message': 'Statut mis à jour avec succès',
         'commande_id': commande.id,
@@ -1588,6 +1578,24 @@ def livreur_update_statut(commande_id):
         'nouveau_statut': commande.statut
     }), 200
 
+
+# ===================== ROUTE DE TEST - VÉRIFIER LA COMMANDE =====================
+@app.route('/api/debug/commande/<int:commande_id>/livreur', methods=['GET'])
+@jwt_required()
+def debug_commande_livreur(commande_id):
+    current_user_id = get_jwt_identity()
+    commande = Commande.query.get_or_404(commande_id)
+    
+    return jsonify({
+        'commande_id': commande.id,
+        'code_suivi': commande.code_suivi,
+        'statut': commande.statut,
+        'livreur_id': commande.livreur_id,
+        'current_user_id': int(current_user_id),
+        'est_assigne': commande.livreur_id == int(current_user_id)
+    }), 200
+
+    
 @app.route('/api/livreur/stats', methods=['GET'])
 @jwt_required()
 def livreur_stats():
