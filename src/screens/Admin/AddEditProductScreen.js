@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: '#fff',
+         paddingTop:50,
     },
     content: {
         flex: 1,

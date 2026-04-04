@@ -123,12 +123,13 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#FF6B6B',
-        padding: 15,
+        padding: 20,
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#fff',
+        paddingTop:50,
     },
     infoBanner: {
         flexDirection: 'row',

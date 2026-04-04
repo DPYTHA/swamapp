@@ -15,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pytha.miniswam"
+      "bundleIdentifier": "com.pytha.miniswam",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cette application utilise votre position pour faciliter la livraison de vos commandes.",
+        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner des produits si nécessaire.",
+        "NSPhotoLibraryUsageDescription": "Cette application peut accéder à vos photos pour télécharger une image de profil."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +29,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.pytha.miniswam"
+      "package": "com.pytha.miniswam",
+      "versionCode": 2
     },
     "web": {
       "output": "single",
