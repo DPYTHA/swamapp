@@ -16,6 +16,13 @@ except Exception as e:
     print(f"❌ Erreur import SQLAlchemy: {e}", file=sys.stderr)
     sys.exit(1)
 
+import requests
+import hmac
+import hashlib
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import (
@@ -30,7 +37,6 @@ import json
 import random
 import logging
 import string
-import requests
 import os
 from functools import wraps
 from dotenv import load_dotenv
@@ -82,6 +88,14 @@ def health():
         "database": database_url is not None,
         "cloudinary": bool(CLOUDINARY_CLOUD_NAME)
     })
+
+# ================== GENIUS PAY CONFIG ==================
+GENIUS_PAY_API_URL = os.getenv("GENIUS_PAY_API_URL", "https://geniuspay.ci/api/v1/merchant")
+GENIUS_PAY_API_KEY = os.getenv("GENIUS_PAY_API_KEY", "")
+GENIUS_PAY_API_SECRET = os.getenv("GENIUS_PAY_API_SECRET", "")
+GENIUS_PAY_WEBHOOK_SECRET = os.getenv("GENIUS_PAY_WEBHOOK_SECRET", "")
+GENIUS_PAY_REDIRECT_URL = os.getenv("GENIUS_PAY_REDIRECT_URL", "https://votre-app.up.railway.app/api/payment/redirect")
+GENIUS_PAY_CALLBACK_URL = os.getenv("GENIUS_PAY_CALLBACK_URL", "https://votre-app.up.railway.app/api/payment/webhook")
 
 # ===================== MODELES =====================
 class User(db.Model):
@@ -600,15 +614,8 @@ def create_commande():
         )
         db.session.add(detail)
 
-    nouveau_paiement = Paiement(
-        commande_id=new_commande.id,
-        code_suivi=code_suivi,
-        montant=total_final,
-        methode=data['methode_paiement'],
-        numero_transaction=data.get('numero_transaction', ''),
-        statut='en_attente'
-    )
-    db.session.add(nouveau_paiement)
+    # ✅ Utiliser create_paiement_auto pour le paiement
+    nouveau_paiement = create_paiement_auto(new_commande.id, total_final, data['methode_paiement'])
 
     db.session.commit()
 
@@ -633,7 +640,7 @@ def create_commande():
         'code_suivi': code_suivi,
         'commande_id': new_commande.id,
         'total': total_final,
-        'paiement_id': nouveau_paiement.id
+        'paiement_id': nouveau_paiement.id if nouveau_paiement else None
     }), 201
 
 @app.route('/api/commandes/client', methods=['GET'])
@@ -808,7 +815,7 @@ def get_all_livreurs():
 
 
 # GET /api/admin/livreurs-disponibles - Liste des livreurs disponibles
-@app.route('/api/admin/livreurs-disponibles', methods=['GET'])
+@app.route('/api/admin/livreurs-disponibles', methods(['GET'])
 @jwt_required()
 def get_livreurs_disponibles():
     current_user_id = get_jwt_identity()
@@ -1096,6 +1103,7 @@ def valider_livreur(livreur_id):
     )
     
     return jsonify({'message': 'Livreur validé avec succès'}), 200
+
 # ===================== ROUTES ADMIN STATS DÉTAILLÉES =====================
 @app.route('/api/admin/stats/detailed', methods=['GET'])
 @jwt_required()
@@ -1208,7 +1216,7 @@ def get_admin_stats_detailed():
         }
     }), 200
 
-@app.route('/api/admin/commandes/<string:code_suivi>', methods=['GET'])
+@app.route('/api/admin/commandes/<string:code_suivi>', methods(['GET'])
 @jwt_required()
 def get_admin_commande_detail(code_suivi):
     current_user_id = get_jwt_identity()
@@ -1473,7 +1481,6 @@ def livreur_historique_livraisons():
     } for c in commandes])
 
 # ===================== ROUTES LIVREUR - ACCEPTER LIVRAISON =====================
-# ===================== ROUTES LIVREUR - ACCEPTER LIVRAISON (CORRIGÉE) =====================
 @app.route('/api/livreur/commandes/<int:commande_id>/accepter', methods=['PUT'])
 @jwt_required()
 def livreur_accepter_livraison(commande_id):
@@ -1491,24 +1498,19 @@ def livreur_accepter_livraison(commande_id):
     
     commande = Commande.query.get_or_404(commande_id)
     
-    # 🔍 LOGS POUR DÉBOGUER
     print(f"🔍 Tentative d'acceptation par livreur ID: {current_user_id}")
     print(f"📦 Commande ID: {commande_id}, Code: {commande.code_suivi}")
     print(f"📦 Livreur actuel: {commande.livreur_id}, Statut: {commande.statut}")
     
-    # Vérifier que la commande n'a pas déjà de livreur
     if commande.livreur_id is not None and commande.livreur_id > 0:
         return jsonify({'message': 'Cette commande a déjà un livreur'}), 400
     
-    # Vérifier que la commande est disponible
     if commande.statut != 'preparation':
         return jsonify({'message': 'Cette commande n\'est pas disponible'}), 400
     
-    # ✅ ASSIGNER LE LIVREUR À LA COMMANDE
     commande.livreur_id = current_user_id
     db.session.commit()
     
-    # 🔍 VÉRIFICATION APRÈS SAUVEGARDE
     print(f"✅ Après sauvegarde - livreur_id: {commande.livreur_id}")
     
     return jsonify({
@@ -1517,6 +1519,7 @@ def livreur_accepter_livraison(commande_id):
         'code_suivi': commande.code_suivi,
         'livreur_id': current_user_id
     }), 200
+
 # ===================== ROUTES LIVREUR - MISE À JOUR STATUT =====================
 @app.route('/api/livreur/commandes/<int:commande_id>/statut', methods=['PUT'])
 @jwt_required()
@@ -1534,7 +1537,6 @@ def livreur_update_statut(commande_id):
     
     commande = Commande.query.get_or_404(commande_id)
     
-    # Vérifier que le livreur est bien assigné à cette commande
     print(f"🔍 Vérification - Livreur ID: {current_user_id}, Commande livreur_id: {commande.livreur_id}")
     
     if commande.livreur_id != current_user_id:
@@ -1554,7 +1556,6 @@ def livreur_update_statut(commande_id):
     if nouveau_statut == 'livree':
         commande.date_livraison = datetime.now(timezone.utc)
         
-        # Notifier le client
         send_push_notification(
             user_id=commande.client_id,
             title="✅ Commande livrée",
@@ -1577,7 +1578,6 @@ def livreur_update_statut(commande_id):
         'code_suivi': commande.code_suivi,
         'nouveau_statut': commande.statut
     }), 200
-
 
 # ===================== ROUTE DE TEST - VÉRIFIER LA COMMANDE =====================
 @app.route('/api/debug/commande/<int:commande_id>/livreur', methods=['GET'])
@@ -1639,7 +1639,6 @@ def livreur_detail_commande(commande_id):
     
     commande = Commande.query.get_or_404(commande_id)
     
-    # Vérifier que le livreur a le droit de voir cette commande
     if commande.livreur_id != current_user_id:
         return jsonify({'message': 'Accès non autorisé'}), 403
     
@@ -1854,7 +1853,7 @@ def envoyer_demande_support():
         return jsonify({'message': 'Erreur serveur'}), 500
 
 # ===================== ROUTES STATISTIQUES =====================
-@app.route('/api/client/statistiques', methods=['GET'])
+@app.route('/api/client/statistiques', methods(['GET'])
 @jwt_required()
 def get_statistiques_achat():
     try:
@@ -2045,6 +2044,344 @@ def update_produit(produit_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': 'Erreur serveur'}), 500
+
+# ===================== FONCTIONS GENIUS PAY =====================
+
+def create_genius_pay_payment(amount, currency, user, order_id):
+    """Crée une transaction Genius Pay"""
+    url = f"{GENIUS_PAY_API_URL}/payments"
+    
+    headers = {
+        "X-API-Key": GENIUS_PAY_API_KEY,
+        "X-API-Secret": GENIUS_PAY_API_SECRET,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    
+    customer_phone = getattr(user, 'telephone', '00000000')
+    if not customer_phone or customer_phone == '00000000':
+        customer_phone = '0700000000'
+    
+    customer_phone = customer_phone.replace(' ', '').replace('-', '')
+    if not customer_phone.startswith('0'):
+        customer_phone = '0' + customer_phone
+    
+    payload = {
+        "amount": int(amount),
+        "currency": currency,
+        "description": f"Commande - {user.nom or user.telephone}",
+        "customer": {
+            "name": user.nom or "Client",
+            "phone": customer_phone,
+            "email": f"{user.telephone}@client.com",
+        },
+        "success_url": GENIUS_PAY_REDIRECT_URL + f"?status=success&order_id={order_id}&user_id={user.id}",
+        "error_url": GENIUS_PAY_REDIRECT_URL + f"?status=failed&order_id={order_id}&user_id={user.id}",
+        "metadata": {
+            "order_id": str(order_id),
+            "user_id": str(user.id),
+        }
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=30, verify=False)
+        
+        if response.status_code in [200, 201]:
+            data = response.json()
+            result = data.get("data", data)
+            return {
+                "reference": result.get("reference"),
+                "checkout_url": result.get("checkout_url") or result.get("payment_url"),
+                "status": result.get("status"),
+            }
+        else:
+            error_text = response.text if response.text else "Erreur inconnue"
+            raise Exception(f"Genius Pay erreur {response.status_code}: {error_text}")
+            
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Impossible de contacter Genius Pay: {str(e)}")
+
+def verify_genius_pay_payment(reference):
+    """Vérifie le statut d'un paiement"""
+    try:
+        url = f"{GENIUS_PAY_API_URL}/payments/{reference}"
+        headers = {
+            "X-API-Key": GENIUS_PAY_API_KEY,
+            "X-API-Secret": GENIUS_PAY_API_SECRET,
+        }
+        response = requests.get(url, headers=headers, timeout=30, verify=False)
+        
+        if response.status_code == 200:
+            data = response.json()
+            result = data.get("data", data)
+            status = result.get("status")
+            return status in ["completed", "success", "approved"]
+        return False
+    except Exception:
+        return False
+
+def verify_genius_pay_webhook_signature(timestamp, raw_body, signature_header):
+    """Vérifie la signature du webhook"""
+    if not GENIUS_PAY_WEBHOOK_SECRET or not signature_header or not timestamp:
+        return False
+    try:
+        if abs(datetime.now(timezone.utc).timestamp() - int(timestamp)) > 300:
+            return False
+    except ValueError:
+        return False
+    data_to_sign = f"{timestamp}.{raw_body.decode()}"
+    expected_signature = hmac.new(
+        GENIUS_PAY_WEBHOOK_SECRET.encode(),
+        data_to_sign.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected_signature, signature_header)
+
+# ===================== ROUTES PAIEMENT GENIUS PAY =====================
+
+@app.route('/api/payment/initiate', methods=['POST'])
+@jwt_required()
+def initiate_payment():
+    """Initie un paiement Genius Pay pour une commande"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user:
+            return jsonify({'message': 'Utilisateur non trouvé'}), 404
+        
+        data = request.get_json()
+        order_id = data.get('order_id')
+        
+        if not order_id:
+            return jsonify({'message': 'ID commande requis'}), 400
+        
+        commande = Commande.query.filter_by(id=order_id, client_id=current_user_id).first()
+        if not commande:
+            return jsonify({'message': 'Commande non trouvée'}), 404
+        
+        currency = data.get('currency', 'XOF').upper()
+        if currency not in ("XOF", "EUR", "USD"):
+            currency = "XOF"
+        
+        result = create_genius_pay_payment(commande.total, currency, user, commande.id)
+        
+        # Sauvegarder la référence de paiement
+        paiement = Paiement.query.filter_by(commande_id=commande.id).first()
+        if paiement:
+            paiement.numero_transaction = result.get('reference')
+            paiement.methode = 'genius_pay'
+            paiement.statut = 'en_attente'
+            db.session.commit()
+        
+        return jsonify({
+            'checkout_url': result.get('checkout_url'),
+            'reference': result.get('reference'),
+            'status': result.get('status')
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur paiement: {e}")
+        return jsonify({'message': str(e)}), 500
+
+@app.route('/api/payment/webhook', methods=['POST'])
+def payment_webhook():
+    """Webhook Genius Pay - Valide automatiquement le paiement"""
+    raw_body = request.get_data()
+    signature = request.headers.get("X-Webhook-Signature", "")
+    timestamp = request.headers.get("X-Webhook-Timestamp", "")
+    event = request.headers.get("X-Webhook-Event", "")
+    
+    # Vérifier la signature
+    if not verify_genius_pay_webhook_signature(timestamp, raw_body, signature):
+        return jsonify({'error': 'Signature invalide'}), 401
+    
+    payload = request.get_json(silent=True) or {}
+    transaction = payload.get("data", {})
+    reference = transaction.get("reference")
+    
+    if not reference:
+        return jsonify({'error': 'Reference manquante'}), 400
+    
+    # Trouver le paiement
+    paiement = Paiement.query.filter_by(numero_transaction=reference).first()
+    if not paiement:
+        return jsonify({'error': 'Paiement non trouvé'}), 404
+    
+    # Valider le paiement
+    paiement.statut = 'valide'
+    paiement.date_validation = datetime.now(timezone.utc)
+    
+    # Mettre à jour la commande
+    commande = paiement.commande
+    commande.statut = 'preparation'
+    commande.statut_paiement = 'valide'
+    
+    # Mettre à jour le stock
+    for detail in commande.details:
+        produit = Produit.query.get(detail.produit_id)
+        if produit:
+            produit.stock -= detail.quantite
+    
+    db.session.commit()
+    
+    # Notifier le client
+    send_push_notification(
+        user_id=commande.client_id,
+        title="✅ Paiement validé",
+        body=f"Votre paiement de {paiement.montant} FCFA a été validé.",
+        data={
+            'type': 'payment_validated',
+            'orderId': commande.id,
+            'code': commande.code_suivi
+        },
+        notification_type='payment'
+    )
+    
+    return jsonify({'received': True}), 200
+
+@app.route('/api/payment/redirect', methods=['GET'])
+def payment_redirect():
+    """Page de redirection après paiement"""
+    status = request.args.get('status', 'success')
+    order_id = request.args.get('order_id')
+    
+    if status == 'success' and order_id:
+        commande = Commande.query.get(order_id)
+        if commande:
+            paiement = Paiement.query.filter_by(commande_id=commande.id).first()
+            if paiement and paiement.statut == 'en_attente':
+                try:
+                    is_paid = verify_genius_pay_payment(paiement.numero_transaction)
+                    if is_paid:
+                        paiement.statut = 'valide'
+                        paiement.date_validation = datetime.now(timezone.utc)
+                        commande.statut = 'preparation'
+                        commande.statut_paiement = 'valide'
+                        db.session.commit()
+                except Exception:
+                    pass
+    
+    if status == 'success':
+        message = "✅ Paiement reçu ! Votre commande est en cours de préparation."
+        emoji = "🎉"
+    else:
+        message = "❌ Le paiement n'a pas abouti. Vous pouvez réessayer."
+        emoji = "😅"
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Paiement</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #FF6B6B 0%, #ee5a24 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+            }}
+            .container {{
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 420px;
+                width: 100%;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }}
+            .emoji {{ font-size: 72px; margin-bottom: 20px; }}
+            .title {{ font-size: 28px; font-weight: bold; color: #333; margin-bottom: 10px; }}
+            .subtitle {{ font-size: 16px; color: #666; margin-bottom: 30px; line-height: 1.6; }}
+            .button {{ display: inline-block; background: #FF6B6B; color: white; padding: 14px 40px; border-radius: 30px; text-decoration: none; font-weight: bold; font-size: 16px; }}
+            .footer {{ margin-top: 20px; font-size: 12px; color: #999; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="emoji">{emoji}</div>
+            <div class="title">Paiement</div>
+            <div class="subtitle">{message}</div>
+            <a href="votre-app-scheme://payment/status" class="button">Retourner à l'application</a>
+            <div class="footer">Paiement sécurisé</div>
+        </div>
+        <script>
+            setTimeout(function() {{ window.location.href = "votre-app-scheme://payment/status"; }}, 3000);
+        </script>
+    </body>
+    </html>
+    """
+
+@app.route('/api/payment/status/<int:order_id>', methods=['GET'])
+@jwt_required()
+def payment_status(order_id):
+    """Vérifie le statut de paiement d'une commande"""
+    current_user_id = get_jwt_identity()
+    commande = Commande.query.filter_by(id=order_id, client_id=current_user_id).first()
+    
+    if not commande:
+        return jsonify({'message': 'Commande non trouvée'}), 404
+    
+    paiement = Paiement.query.filter_by(commande_id=commande.id).first()
+    
+    return jsonify({
+        'statut': paiement.statut if paiement else 'non_defini',
+        'montant': paiement.montant if paiement else 0,
+        'methode': paiement.methode if paiement else None,
+        'date_validation': paiement.date_validation.isoformat() if paiement and paiement.date_validation else None
+    }), 200
+
+@app.route('/api/payment/test/<int:order_id>', methods=['POST'])
+@jwt_required()
+def test_payment(order_id):
+    """Route de test pour valider un paiement sans Genius Pay"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if user.role != 'admin':
+        return jsonify({'message': 'Accès non autorisé'}), 403
+    
+    commande = Commande.query.get_or_404(order_id)
+    paiement = Paiement.query.filter_by(commande_id=commande.id).first()
+    
+    if paiement:
+        paiement.statut = 'valide'
+        paiement.date_validation = datetime.now(timezone.utc)
+        commande.statut = 'preparation'
+        commande.statut_paiement = 'valide'
+        db.session.commit()
+        
+        return jsonify({'message': 'Paiement validé pour test'}), 200
+    
+    return jsonify({'message': 'Paiement non trouvé'}), 404
+
+# ===================== FONCTION CREATE_PAIEMENT_AUTO =====================
+def create_paiement_auto(commande_id, montant, methode='genius_pay'):
+    """Crée automatiquement un paiement pour une commande"""
+    paiement_existant = Paiement.query.filter_by(commande_id=commande_id).first()
+    if paiement_existant:
+        return paiement_existant
+    
+    commande = Commande.query.get(commande_id)
+    if not commande:
+        return None
+    
+    nouveau_paiement = Paiement(
+        commande_id=commande_id,
+        code_suivi=commande.code_suivi,
+        montant=montant,
+        methode=methode,
+        statut='en_attente'
+    )
+    db.session.add(nouveau_paiement)
+    db.session.commit()
+    return nouveau_paiement
 
 # ===================== CRÉATION DES TABLES =====================
 with app.app_context():
