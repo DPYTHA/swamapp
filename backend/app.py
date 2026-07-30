@@ -1217,7 +1217,7 @@ def get_admin_stats_detailed():
         }
     }), 200
 
-@app.route('/api/admin/commandes/<string:code_suivi>', methods(['GET'])
+@app.route('/api/admin/commandes/<string:code_suivi>', methods=['GET'])
 @jwt_required()
 def get_admin_commande_detail(code_suivi):
     current_user_id = get_jwt_identity()
@@ -1854,7 +1854,7 @@ def envoyer_demande_support():
         return jsonify({'message': 'Erreur serveur'}), 500
 
 # ===================== ROUTES STATISTIQUES =====================
-@app.route('/api/client/statistiques', methods(['GET'])
+@app.route('/api/client/statistiques', methods=['GET'])
 @jwt_required()
 def get_statistiques_achat():
     try:
