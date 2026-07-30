@@ -96,7 +96,7 @@ GENIUS_PAY_API_SECRET = os.getenv("GENIUS_PAY_API_SECRET", "")
 GENIUS_PAY_WEBHOOK_SECRET = os.getenv("GENIUS_PAY_WEBHOOK_SECRET", "")
 GENIUS_PAY_REDIRECT_URL = os.getenv("GENIUS_PAY_REDIRECT_URL", "https://swamapp-production.up.railway.app/api/payment/redirect")
 GENIUS_PAY_CALLBACK_URL = os.getenv("GENIUS_PAY_CALLBACK_URL", "https://swamapp-production.up.railway.app/api/payment/webhook")
-")
+
 
 # ===================== MODELES =====================
 class User(db.Model):
