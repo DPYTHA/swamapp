@@ -1,9 +1,9 @@
 // src/utils/constants.js
 
 // ============================================================
-// ✅ API URL - UNE SEULE DÉFINITION
+// ✅ API URL - UNE SEULE DÉFINITION (CORRECTE)
 // ============================================================
-export const API_URL = "https://swamapp-production.up.railway.app/api";
+export const API_URL = 'https://swamapp-production.up.railway.app/api';
 
 // ============================================================
 // COULEURS
@@ -66,7 +66,6 @@ export const DESTINATIONS = [
         adresse: 'Résidence Egnehué, Assinie',
         distance: 700,
     },
-
     // ===== PANGO 2 =====
     {
         id: 5,
@@ -86,7 +85,6 @@ export const DESTINATIONS = [
         adresse: 'Chez Mr Akalo, Assinie',
         distance: 1300,
     },
-
     // ===== EPKOUZAN =====
     {
         id: 8,
@@ -106,7 +104,6 @@ export const DESTINATIONS = [
         adresse: 'Milan hôtel Sominou, Assinie',
         distance: 750,
     },
-
     // ===== DONWAHI =====
     {
         id: 11,
@@ -126,7 +123,6 @@ export const DESTINATIONS = [
         adresse: 'Yamaman lodge, Assinie',
         distance: 1300,
     },
-
     // ===== VOIE PRINCIPALE =====
     {
         id: 14,
@@ -164,7 +160,6 @@ export const DESTINATIONS = [
         adresse: 'Super marché Assinie',
         distance: 1100,
     },
-
     // ===== ZION =====
     {
         id: 20,
@@ -196,7 +191,6 @@ export const DESTINATIONS = [
         adresse: 'Zion Hôtel, Assinie',
         distance: 1000,
     },
-
     // ===== VOIE DU MARCHÉ =====
     {
         id: 25,
@@ -216,7 +210,6 @@ export const DESTINATIONS = [
         adresse: 'Boulangerie, Assinie',
         distance: 400,
     },
-
     // ===== VOIE DU COMMISSARIAT =====
     {
         id: 28,
@@ -236,7 +229,6 @@ export const DESTINATIONS = [
         adresse: 'Hôtel cool Mafia, Assinie',
         distance: 600,
     },
-
     // ===== VOIE DU DISPENSAIRE =====
     {
         id: 31,
@@ -256,7 +248,6 @@ export const DESTINATIONS = [
         adresse: 'Église méthodiste, Assinie',
         distance: 400,
     },
-
     // ===== VOIE CATHOLIQUE =====
     {
         id: 34,
@@ -264,7 +255,6 @@ export const DESTINATIONS = [
         adresse: 'Maternité, Assinie',
         distance: 200,
     },
-
     // ===== SAGBADOU =====
     {
         id: 35,
@@ -284,7 +274,6 @@ export const DESTINATIONS = [
         adresse: 'Tarpon, Assinie',
         distance: 650,
     },
-
     // ===== ALIKRO =====
     {
         id: 38,
@@ -292,7 +281,6 @@ export const DESTINATIONS = [
         adresse: 'Alikro, Assinie',
         distance: 3000,
     },
-
     // ===== ABISSA LODGE =====
     {
         id: 39,
@@ -300,7 +288,6 @@ export const DESTINATIONS = [
         adresse: 'Abissa lodge, Assinie',
         distance: 3100,
     },
-
     // ===== STATION =====
     {
         id: 40,
@@ -308,15 +295,13 @@ export const DESTINATIONS = [
         adresse: 'Station, Assinie',
         distance: 2500,
     },
-
     // ===== N'GOAKRO =====
     {
         id: 41,
-        nom: 'N\'goakro',
-        adresse: 'N\'goakro, Assinie',
+        nom: "N'goakro",
+        adresse: "N'goakro, Assinie",
         distance: 2700,
     },
-
     // ===== CARREFOUR ESSANKRO =====
     {
         id: 42,
@@ -324,7 +309,6 @@ export const DESTINATIONS = [
         adresse: 'Carrefour Essankro, Assinie',
         distance: 2700,
     },
-
     // ===== BIKO LODGE =====
     {
         id: 43,
@@ -332,7 +316,6 @@ export const DESTINATIONS = [
         adresse: 'Biko lodge, Assinie',
         distance: 6300,
     },
-
     // ===== RÉSIDENCE DJÉNE =====
     {
         id: 44,
@@ -340,7 +323,6 @@ export const DESTINATIONS = [
         adresse: 'Résidence Djéne, Assinie',
         distance: 6400,
     },
-
     // ===== LE SUNSHINE LODGE =====
     {
         id: 45,
@@ -348,7 +330,6 @@ export const DESTINATIONS = [
         adresse: 'Le Sunshine lodge, Assinie',
         distance: 7300,
     },
-
     // ===== MYKONOS =====
     {
         id: 46,
@@ -356,15 +337,13 @@ export const DESTINATIONS = [
         adresse: 'Mykonos, Assinie',
         distance: 7800,
     },
-
     // ===== L'ESCAPADE HÔTEL =====
     {
         id: 47,
-        nom: 'L\'escapade hôtel',
-        adresse: 'L\'escapade hôtel, Assinie',
+        nom: "L'escapade hôtel",
+        adresse: "L'escapade hôtel, Assinie",
         distance: 8800,
     },
-
     // ===== AKOULA KAN LODGE =====
     {
         id: 48,
@@ -372,7 +351,6 @@ export const DESTINATIONS = [
         adresse: 'Akoula kan lodge, Assinie',
         distance: 10400,
     },
-
     // ===== NAHIKO HÔTEL =====
     {
         id: 49,
@@ -380,7 +358,6 @@ export const DESTINATIONS = [
         adresse: 'Nahiko hôtel, Assinie',
         distance: 11300,
     },
-
     // ===== AKWA BEACH =====
     {
         id: 50,
@@ -394,7 +371,6 @@ export const DESTINATIONS = [
         adresse: 'Assinie Beach Hôtel, Assinie',
         distance: 11600,
     },
-
     // ===== COUCOUÉ LODGE =====
     {
         id: 51,
@@ -402,7 +378,6 @@ export const DESTINATIONS = [
         adresse: 'Coucoué lodge, Assinie',
         distance: 13400,
     },
-
     // ===== MARINE DE BABIHANA =====
     {
         id: 52,
@@ -410,15 +385,13 @@ export const DESTINATIONS = [
         adresse: 'Marine de Babihana, Assinie',
         distance: 13500,
     },
-
     // ===== LE CLIMBIÉ D'ASSINIE =====
     {
         id: 53,
-        nom: 'Le Climbié d\'Assinie',
-        adresse: 'Le Climbié d\'Assinie, Assinie',
+        nom: "Le Climbié d'Assinie",
+        adresse: "Le Climbié d'Assinie, Assinie",
         distance: 15200,
     },
-
     // ===== HÔTEL ANDRÉ RICHARD =====
     {
         id: 58,
@@ -426,7 +399,6 @@ export const DESTINATIONS = [
         adresse: 'Hôtel André Richard, Assinie',
         distance: 15400,
     },
-
     // ===== VILLA TOURACO =====
     {
         id: 54,
@@ -436,11 +408,10 @@ export const DESTINATIONS = [
     },
     {
         id: 55,
-        nom: 'La maison d\'Akoula',
-        adresse: 'La maison d\'Akoula, Assinie',
+        nom: "La maison d'Akoula",
+        adresse: "La maison d'Akoula, Assinie",
         distance: 16000,
     },
-
     // ===== VILLA AKWABA =====
     {
         id: 56,
@@ -448,7 +419,6 @@ export const DESTINATIONS = [
         adresse: 'Villa Akwaba, Assinie',
         distance: 16200,
     },
-
     // ===== ELIMAH HOUSES =====
     {
         id: 57,
@@ -456,7 +426,6 @@ export const DESTINATIONS = [
         adresse: 'Elimah Houses, Assinie',
         distance: 16600,
     },
-
     // ===== FÉLINE LODGE =====
     {
         id: 59,
@@ -464,7 +433,6 @@ export const DESTINATIONS = [
         adresse: 'Féline Lodge, Assinie',
         distance: 17600,
     },
-
     // ===== HÔTEL LE PREMIER ASSOUINDÉ =====
     {
         id: 60,
@@ -472,7 +440,6 @@ export const DESTINATIONS = [
         adresse: 'Hôtel le Premier Assouindé, Assinie',
         distance: 18500,
     },
-
     // ===== NOTEVIA HÔTEL =====
     {
         id: 61,
@@ -480,12 +447,11 @@ export const DESTINATIONS = [
         adresse: 'Notevia Hôtel, Assinie',
         distance: 19000,
     },
-
     // ===== ROND-POINT D'ASSOUINDÉ =====
     {
         id: 63,
-        nom: 'Rond-point d\'Assouindé',
-        adresse: 'Rond-point d\'Assouindé, Assinie',
+        nom: "Rond-point d'Assouindé",
+        adresse: "Rond-point d'Assouindé, Assinie",
         distance: 21200,
     },
 ];

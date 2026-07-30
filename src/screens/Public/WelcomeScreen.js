@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import api from '../../services/api';
+import { API_URL } from '../../utils/constants';
 
 const { width } = Dimensions.get('window');
 const numColumns = 2;
@@ -36,7 +37,7 @@ const ALL_CATEGORIES = [
 export default function WelcomeScreen({ navigation }) {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
-    // Afficher seulement les 6 premières catégories sur la page d'accueil
+    const [error, setError] = useState(null);
     const [displayCategories, setDisplayCategories] = useState(ALL_CATEGORIES.slice(0, 6));
 
     // Charger les produits depuis l'API
@@ -47,10 +48,34 @@ export default function WelcomeScreen({ navigation }) {
     const loadProducts = async () => {
         try {
             setLoading(true);
+            setError(null);
+
+            // ✅ Log pour vérifier l'URL complète
+            console.log('🔍 API_URL depuis constants:', API_URL);
+            console.log('📤 Chargement des produits...');
+
+            // ✅ URL correcte (sans /api dans l'appel)
             const response = await api.get('/produits?limit=100');
+
+            console.log('✅ Produits chargés:', response.data.length);
             setProducts(response.data);
         } catch (error) {
-            console.log('❌ Erreur chargement produits:', error);
+            console.error('❌ Erreur chargement produits:', error);
+
+            // ✅ Afficher plus de détails sur l'erreur
+            if (error.response) {
+                console.error('📄 Status:', error.response.status);
+                console.error('📄 Data:', error.response.data);
+                setError(`Erreur ${error.response.status}: ${error.response.data?.message || 'Erreur serveur'}`);
+            } else if (error.request) {
+                console.error('📄 Pas de réponse du serveur');
+                console.error('📄 BaseURL:', error.config?.baseURL);
+                console.error('📄 URL:', error.config?.url);
+                setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+            } else {
+                console.error('📄 Message:', error.message);
+                setError(error.message);
+            }
         } finally {
             setLoading(false);
         }
@@ -115,6 +140,19 @@ export default function WelcomeScreen({ navigation }) {
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FF6B6B" />
                 <Text style={styles.loadingText}>Chargement des produits...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={styles.errorContainer}>
+                <Icon name="error-outline" size={60} color="#FF6B6B" />
+                <Text style={styles.errorTitle}>Oups !</Text>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={loadProducts}>
+                    <Text style={styles.retryButtonText}>Réessayer</Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -246,6 +284,37 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
     },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        padding: 20,
+    },
+    errorTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 15,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#666',
+        textAlign: 'center',
+        marginTop: 10,
+        marginBottom: 20,
+    },
+    retryButton: {
+        backgroundColor: '#FF6B6B',
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 25,
+    },
+    retryButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
     hero: {
         backgroundColor: '#FF6B6B',
         padding: 30,
@@ -309,7 +378,7 @@ const styles = StyleSheet.create({
     },
     categoryCard: {
         alignItems: 'center',
-        width: (width - 45) / 3, // 3 catégories par ligne
+        width: (width - 45) / 3,
         marginBottom: 15,
     },
     categoryIcon: {
