@@ -94,8 +94,9 @@ GENIUS_PAY_API_URL = os.getenv("GENIUS_PAY_API_URL", "https://geniuspay.ci/api/v
 GENIUS_PAY_API_KEY = os.getenv("GENIUS_PAY_API_KEY", "")
 GENIUS_PAY_API_SECRET = os.getenv("GENIUS_PAY_API_SECRET", "")
 GENIUS_PAY_WEBHOOK_SECRET = os.getenv("GENIUS_PAY_WEBHOOK_SECRET", "")
-GENIUS_PAY_REDIRECT_URL = os.getenv("GENIUS_PAY_REDIRECT_URL", "https://votre-app.up.railway.app/api/payment/redirect")
-GENIUS_PAY_CALLBACK_URL = os.getenv("GENIUS_PAY_CALLBACK_URL", "https://votre-app.up.railway.app/api/payment/webhook")
+GENIUS_PAY_REDIRECT_URL = os.getenv("GENIUS_PAY_REDIRECT_URL", "https://swamapp-production.up.railway.app/api/payment/redirect")
+GENIUS_PAY_CALLBACK_URL = os.getenv("GENIUS_PAY_CALLBACK_URL", "https://swamapp-production.up.railway.app/api/payment/webhook")
+")
 
 # ===================== MODELES =====================
 class User(db.Model):
@@ -815,7 +816,7 @@ def get_all_livreurs():
 
 
 # GET /api/admin/livreurs-disponibles - Liste des livreurs disponibles
-@app.route('/api/admin/livreurs-disponibles', methods(['GET'])
+@app.route('/api/admin/livreurs-disponibles', methods=['GET'])
 @jwt_required()
 def get_livreurs_disponibles():
     current_user_id = get_jwt_identity()
