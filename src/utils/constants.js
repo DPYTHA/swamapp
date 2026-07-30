@@ -3,7 +3,7 @@
 // ============================================================
 // ✅ API URL - UNE SEULE DÉFINITION
 // ============================================================
-export const API_URL = "https://swamapp-production.up.railway.app/api";
+export const API_URL = "https://swamapp-production.up.railway.app/";
 
 // ============================================================
 // COULEURS
