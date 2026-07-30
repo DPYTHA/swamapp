@@ -1,6 +1,13 @@
+// src/utils/constants.js
 
-export const API_URL = 'https://swamapp-production.up.railway.app/api';
+// ============================================================
+// ✅ API URL - UNE SEULE DÉFINITION
+// ============================================================
+export const API_URL = "https://swamapp-production.up.railway.app/api";
 
+// ============================================================
+// COULEURS
+// ============================================================
 export const COLORS = {
     primary: '#FF6B6B',
     secondary: '#4ECDC4',
@@ -16,12 +23,18 @@ export const COLORS = {
     info: '#2196F3',
 };
 
+// ============================================================
+// CATÉGORIES
+// ============================================================
 export const CATEGORIES = [
     { id: 'ingredients', name: 'Ingrédients', icon: 'restaurant' },
     { id: 'boissons', name: 'Boissons', icon: 'local-drink' },
     { id: 'poissons', name: 'Poissons', icon: 'set-meal' },
 ];
 
+// ============================================================
+// STATUTS DES COMMANDES
+// ============================================================
 export const ORDER_STATUS = {
     EN_ATTENTE: { value: 'en_attente', label: 'En attente', color: '#FFC107' },
     PREPARATION: { value: 'preparation', label: 'En préparation', color: '#2196F3' },
@@ -30,9 +43,10 @@ export const ORDER_STATUS = {
     ANNULEE: { value: 'annulee', label: 'Annulée', color: '#F44336' },
 };
 
-// 📍 LISTE DES DESTINATIONS AVEC DISTANCES
+// ============================================================
+// DESTINATIONS AVEC DISTANCES
+// ============================================================
 export const DESTINATIONS = [
-
     // ===== PANGO 1 =====
     {
         id: 2,
@@ -64,7 +78,7 @@ export const DESTINATIONS = [
         id: 6,
         nom: 'Pango 2',
         adresse: 'Atelier espoir, Assinie',
-        distance: 1000, // Valeur par défaut si non spécifiée
+        distance: 1000,
     },
     {
         id: 7,
@@ -474,11 +488,11 @@ export const DESTINATIONS = [
         adresse: 'Rond-point d\'Assouindé, Assinie',
         distance: 21200,
     },
-
 ];
 
-
-// ⏰ OPTIONS DE LIVRAISON
+// ============================================================
+// OPTIONS DE LIVRAISON
+// ============================================================
 export const DELIVERY_OPTIONS = [
     {
         id: 'asap',
@@ -510,7 +524,9 @@ export const DELIVERY_OPTIONS = [
     },
 ];
 
-// Fonction pour calculer les frais de livraison (100 m = 150 FCFA)
+// ============================================================
+// FONCTIONS
+// ============================================================
 export const calculateDeliveryFee = (distance) => {
     const fee = Math.ceil(distance / 100) * 150;
     return fee;

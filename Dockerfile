@@ -2,12 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copier tout le dossier backend
 COPY backend/ ./backend/
 COPY requirements.txt .
-
-ENV PYTHONPATH=/app
+COPY .env .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Force le port 8081
-CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8081"]
+# ✅ Utiliser backend.app:app
+CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8081", "--workers", "4", "--threads", "4"]

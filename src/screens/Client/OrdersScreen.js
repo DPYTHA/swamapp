@@ -3,6 +3,7 @@ import {
     ActivityIndicator,
     Alert,
     FlatList,
+    Linking,
     RefreshControl,
     StyleSheet,
     Text,
@@ -55,6 +56,7 @@ export default function OrdersScreen({ navigation }) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
+    const [payingOrderId, setPayingOrderId] = useState(null);
 
     const loadOrders = async () => {
         if (!user) {
@@ -75,8 +77,6 @@ export default function OrdersScreen({ navigation }) {
                 message: error.message
             });
             setError(error.response?.data?.message || 'Erreur de chargement');
-
-            // Afficher une alerte en cas d'erreur
             Alert.alert(
                 'Erreur',
                 error.response?.data?.message || 'Impossible de charger vos commandes'
@@ -94,6 +94,61 @@ export default function OrdersScreen({ navigation }) {
     const onRefresh = () => {
         setRefreshing(true);
         loadOrders();
+    };
+
+    // ✅ Fonction pour initier le paiement
+    const handlePayNow = async (orderId) => {
+        try {
+            Alert.alert(
+                'Paiement sécurisé',
+                'Vous allez être redirigé vers la page de paiement Genius Pay',
+                [
+                    { text: 'Annuler', style: 'cancel' },
+                    {
+                        text: 'Payer maintenant',
+                        onPress: async () => {
+                            setPayingOrderId(orderId);
+                            try {
+                                const response = await api.post('/payment/initiate', {
+                                    order_id: orderId,
+                                    currency: 'XOF'
+                                });
+
+                                console.log('✅ Réponse paiement:', response.data);
+
+                                if (response.data.checkout_url) {
+                                    await Linking.openURL(response.data.checkout_url);
+                                } else {
+                                    Alert.alert('Erreur', 'URL de paiement non disponible');
+                                }
+                            } catch (error) {
+                                console.error('❌ Erreur paiement:', error);
+                                Alert.alert(
+                                    'Erreur',
+                                    error.response?.data?.message || 'Impossible d\'initier le paiement'
+                                );
+                            } finally {
+                                setPayingOrderId(null);
+                            }
+                        }
+                    }
+                ]
+            );
+        } catch (error) {
+            console.error('❌ Erreur:', error);
+            setPayingOrderId(null);
+        }
+    };
+
+    // ✅ Fonction pour vérifier le statut du paiement
+    const checkPaymentStatus = async (orderId) => {
+        try {
+            const response = await api.get(`/payment/status/${orderId}`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Erreur vérification paiement:', error);
+            return null;
+        }
     };
 
     if (!user) {
@@ -136,6 +191,7 @@ export default function OrdersScreen({ navigation }) {
 
     const renderOrder = ({ item, index }) => {
         const statutInfo = getStatutInfo(item.statut);
+        const isPaymentPending = item.statut_paiement === 'en_attente';
 
         return (
             <TouchableOpacity
@@ -177,6 +233,26 @@ export default function OrdersScreen({ navigation }) {
                         <Icon name="arrow-forward" size={16} color="#FF6B6B" />
                     </View>
                 </View>
+
+                {/* ✅ Bouton Payer maintenant si paiement en attente */}
+                {isPaymentPending && (
+                    <View style={styles.paymentActions}>
+                        <TouchableOpacity
+                            style={styles.payNowButton}
+                            onPress={() => handlePayNow(item.id)}
+                            disabled={payingOrderId === item.id}
+                        >
+                            {payingOrderId === item.id ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <>
+                                    <Icon name="payment" size={18} color="#fff" />
+                                    <Text style={styles.payNowButtonText}>Payer maintenant</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {item.statut_paiement === 'en_attente' && (
                     <View style={styles.paymentPending}>
@@ -300,6 +376,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 3,
     },
+    firstCard: {
+        marginTop: 0,
+    },
     orderHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -394,6 +473,28 @@ const styles = StyleSheet.create({
         color: '#FFA500',
         fontWeight: '500',
         marginLeft: 6,
+    },
+    // ✅ Nouveaux styles pour le paiement
+    paymentActions: {
+        marginTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
+        paddingTop: 12,
+    },
+    payNowButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#25D366',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        gap: 8,
+    },
+    payNowButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
     },
     lockedContainer: {
         flex: 1,

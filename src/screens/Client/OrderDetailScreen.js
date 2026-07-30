@@ -102,6 +102,7 @@ export default function OrderDetailScreen({ route, navigation }) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+    const [paying, setPaying] = useState(false);
 
     useEffect(() => {
         loadOrderDetails();
@@ -109,13 +110,11 @@ export default function OrderDetailScreen({ route, navigation }) {
 
     const loadOrderDetails = async () => {
         try {
-            // Charger les détails de la commande
             const response = await api.get(`/commandes/suivi/${orderId}`);
             setOrder(response.data);
 
-            // Charger les détails du paiement si nécessaire
             try {
-                const paymentResponse = await api.get(`/commandes/${orderId}/paiement`);
+                const paymentResponse = await api.get(`/payment/status/${orderId}`);
                 setOrder(prev => ({ ...prev, paiement: paymentResponse.data }));
             } catch (paymentError) {
                 console.log('⚠️ Pas de détails de paiement:', paymentError.message);
@@ -132,6 +131,52 @@ export default function OrderDetailScreen({ route, navigation }) {
     const onRefresh = () => {
         setRefreshing(true);
         loadOrderDetails();
+    };
+
+    // ✅ Fonction pour initier le paiement
+    const handlePayNow = async () => {
+        if (!order) return;
+
+        try {
+            Alert.alert(
+                'Paiement sécurisé',
+                `Montant: ${order.total?.toLocaleString() || 0} FCFA`,
+                [
+                    { text: 'Annuler', style: 'cancel' },
+                    {
+                        text: 'Payer maintenant',
+                        onPress: async () => {
+                            setPaying(true);
+                            try {
+                                const response = await api.post('/payment/initiate', {
+                                    order_id: order.id,
+                                    currency: 'XOF'
+                                });
+
+                                console.log('✅ Réponse paiement:', response.data);
+
+                                if (response.data.checkout_url) {
+                                    await Linking.openURL(response.data.checkout_url);
+                                } else {
+                                    Alert.alert('Erreur', 'URL de paiement non disponible');
+                                }
+                            } catch (error) {
+                                console.error('❌ Erreur paiement:', error);
+                                Alert.alert(
+                                    'Erreur',
+                                    error.response?.data?.message || 'Impossible d\'initier le paiement'
+                                );
+                            } finally {
+                                setPaying(false);
+                            }
+                        }
+                    }
+                ]
+            );
+        } catch (error) {
+            console.error('❌ Erreur:', error);
+            setPaying(false);
+        }
     };
 
     const handleCancelOrder = () => {
@@ -213,6 +258,7 @@ export default function OrderDetailScreen({ route, navigation }) {
     const statutInfo = getStatutInfo(order.statut);
     const timeline = getTimelineSteps(order);
     const canCancel = ['en_attente_paiement', 'preparation'].includes(order.statut);
+    const isPaymentPending = order.statut_paiement === 'en_attente' || order.paiement?.statut === 'en_attente';
 
     return (
         <View style={styles.container}>
@@ -362,8 +408,36 @@ export default function OrderDetailScreen({ route, navigation }) {
                                 </Text>
                             </View>
                         </View>
+                        {order.paiement?.numero_transaction && (
+                            <View style={styles.paymentRow}>
+                                <Text style={styles.paymentLabel}>Transaction</Text>
+                                <Text style={styles.paymentValue}>{order.paiement.numero_transaction}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
+
+                {/* ✅ Bouton Payer maintenant */}
+                {isPaymentPending && (
+                    <View style={styles.section}>
+                        <TouchableOpacity
+                            style={styles.payButton}
+                            onPress={handlePayNow}
+                            disabled={paying}
+                        >
+                            {paying ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <>
+                                    <Icon name="payment" size={20} color="#fff" />
+                                    <Text style={styles.payButtonText}>
+                                        Payer {order.total?.toLocaleString() || 0} FCFA
+                                    </Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* Actions */}
                 <View style={styles.actions}>
@@ -683,6 +757,22 @@ const styles = StyleSheet.create({
     paymentStatusText: {
         fontSize: 12,
         fontWeight: '600',
+    },
+    // ✅ Nouveau style pour le bouton de paiement
+    payButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#25D366',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        gap: 10,
+    },
+    payButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     actions: {
         padding: 20,
