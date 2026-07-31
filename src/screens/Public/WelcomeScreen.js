@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import api from '../../services/api';
-import { API_URL } from '../../utils/constants';
 
 const { width } = Dimensions.get('window');
 const numColumns = 2;
@@ -96,7 +95,25 @@ export default function WelcomeScreen({ navigation }) {
             params: params,
         });
     };
+    // src/screens/WelcomeScreen.js
+    import { API_URL } from '../utils/constants';
 
+    const testDirectFetch = async () => {
+        try {
+            console.log('🔍 Test fetch direct vers:', API_URL);
+            const response = await fetch(`${API_URL}/produits?limit=10`);
+            const data = await response.json();
+            console.log('✅ Fetch direct réussi:', data.length, 'produits');
+        } catch (error) {
+            console.error('❌ Fetch direct échoué:', error.message);
+        }
+    };
+
+    // Appeler au chargement
+    useEffect(() => {
+        testDirectFetch();
+        loadProducts();
+    }, []);
     const handleNavigateToProductDetail = (productId) => {
         navigation.navigate('ProductDetail', { productId });
     };
