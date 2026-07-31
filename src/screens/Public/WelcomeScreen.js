@@ -1,3 +1,4 @@
+// src/screens/WelcomeScreen.js
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -12,6 +13,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import api from '../../services/api';
+// ✅ Importer API_URL depuis constants
+import { API_URL } from '../../utils/constants';
 
 const { width } = Dimensions.get('window');
 const numColumns = 2;
@@ -42,14 +45,27 @@ export default function WelcomeScreen({ navigation }) {
     // Charger les produits depuis l'API
     useEffect(() => {
         loadProducts();
+        // ✅ Test direct de l'API
+        testDirectFetch();
     }, []);
+
+    // ✅ Fonction de test direct (pour déboguer)
+    const testDirectFetch = async () => {
+        try {
+            console.log('🔍 Test fetch direct vers:', API_URL);
+            const response = await fetch(`${API_URL}/produits?limit=10`);
+            const data = await response.json();
+            console.log('✅ Fetch direct réussi:', data.length, 'produits');
+        } catch (error) {
+            console.error('❌ Fetch direct échoué:', error.message);
+        }
+    };
 
     const loadProducts = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            // ✅ Log pour vérifier l'URL complète
             console.log('🔍 API_URL depuis constants:', API_URL);
             console.log('📤 Chargement des produits...');
 
@@ -61,7 +77,6 @@ export default function WelcomeScreen({ navigation }) {
         } catch (error) {
             console.error('❌ Erreur chargement produits:', error);
 
-            // ✅ Afficher plus de détails sur l'erreur
             if (error.response) {
                 console.error('📄 Status:', error.response.status);
                 console.error('📄 Data:', error.response.data);
@@ -95,25 +110,7 @@ export default function WelcomeScreen({ navigation }) {
             params: params,
         });
     };
-    // src/screens/WelcomeScreen.js
-    import { API_URL } from '../utils/constants';
 
-    const testDirectFetch = async () => {
-        try {
-            console.log('🔍 Test fetch direct vers:', API_URL);
-            const response = await fetch(`${API_URL}/produits?limit=10`);
-            const data = await response.json();
-            console.log('✅ Fetch direct réussi:', data.length, 'produits');
-        } catch (error) {
-            console.error('❌ Fetch direct échoué:', error.message);
-        }
-    };
-
-    // Appeler au chargement
-    useEffect(() => {
-        testDirectFetch();
-        loadProducts();
-    }, []);
     const handleNavigateToProductDetail = (productId) => {
         navigation.navigate('ProductDetail', { productId });
     };
