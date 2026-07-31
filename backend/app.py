@@ -781,6 +781,40 @@ def get_admin_stats():
         'chiffre_affaires_mois': chiffre_affaires_mois
     }), 200
 
+
+# backend/app.py - Ajouter cette route
+
+@app.route('/api/admin/upload-image', methods=['POST'])
+@jwt_required()
+def admin_upload_image():
+    """Upload une image pour les produits (admin)"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user or user.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        if 'image' not in request.files:
+            return jsonify({'message': 'Aucune image'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'message': 'Fichier vide'}), 400
+        
+        # Upload vers Cloudinary
+        from cloudinary_config import upload_image
+        url = upload_image(file, "swam/products")
+        
+        if url:
+            return jsonify({'image_url': url}), 200
+        else:
+            return jsonify({'message': 'Erreur lors de l\'upload'}), 500
+            
+    except Exception as e:
+        print(f"❌ Erreur upload image: {e}")
+        return jsonify({'message': str(e)}), 500
+
 # ===================== ROUTES ADMIN LIVREURS =====================
 # GET /api/admin/livreurs - Liste tous les livreurs
 @app.route('/api/admin/livreurs', methods=['GET'])

@@ -50,7 +50,7 @@ export const DESTINATIONS = [
         id: 2,
         nom: 'Pango 1',
         adresse: 'Mosquée, Assinie',
-        distance: 600,
+        distance: 0,
     },
     {
         id: 3,

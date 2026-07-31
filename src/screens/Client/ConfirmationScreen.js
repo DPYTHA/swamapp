@@ -5,6 +5,7 @@ import {
     Alert,
     Animated,
     KeyboardAvoidingView,
+    Linking,
     Platform,
     ScrollView,
     StyleSheet,
@@ -17,12 +18,6 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
-
-const MOBILE_MONEY_ACCOUNTS = [
-    { id: 'orange', nom: 'Orange Money', numero: '0757123619', titulaire: 'Olivia', couleur: '#FF6B00', icon: 'phone-android' },
-    { id: 'mtn', nom: 'MTN Money', numero: '0657432617', titulaire: 'Olivia', couleur: '#FFCC00', icon: 'sim-card' },
-    { id: 'wave', nom: 'Wave', numero: '0710069791', titulaire: 'Olivia', couleur: '#2D9CDB', icon: 'waves' },
-];
 
 export default function ConfirmationScreen({ navigation, route }) {
     const { user } = useAuth();
@@ -41,24 +36,26 @@ export default function ConfirmationScreen({ navigation, route }) {
 
     // ✅ État pour le vrai code de suivi
     const [codeSuivi, setCodeSuivi] = useState(tempCodeSuivi);
+    const [orderId, setOrderId] = useState(null);
 
-    // ✅ Calcul du sous-total (utilise quantity)
+    // ✅ Calcul du sous-total
     const subTotal = cartItems.reduce((sum, item) => sum + (item.prix * (item.quantity || 1)), 0);
 
-    // ✅ ÉTATS POUR LE SUIVI
+    // ✅ États pour le suivi
     const [orderStatus, setOrderStatus] = useState('en_attente_paiement');
     const [checkingStatus, setCheckingStatus] = useState(false);
     const [isChatVisible, setIsChatVisible] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [messageText, setMessageText] = useState('');
     const [isOrderConfirmed, setIsOrderConfirmed] = useState(false);
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [isPaying, setIsPaying] = useState(false);
+    const [paymentStatus, setPaymentStatus] = useState(null);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(100)).current;
 
-    // ✅ FONCTION POUR OBTENIR LE LIBELLÉ DU STATUT
+    // ✅ Fonction pour obtenir le libellé du statut
     const getStatusLabel = (statut) => {
         const labels = {
             'en_attente_paiement': 'En attente de paiement',
@@ -70,7 +67,7 @@ export default function ConfirmationScreen({ navigation, route }) {
         return labels[statut] || statut;
     };
 
-    // ✅ FONCTION POUR VÉRIFIER LE STATUT
+    // ✅ Fonction pour vérifier le statut
     const checkOrderStatus = async () => {
         if (!codeSuivi) return false;
 
@@ -94,7 +91,7 @@ export default function ConfirmationScreen({ navigation, route }) {
         }
     };
 
-    // ✅ FONCTION POUR DÉMARRER LA VÉRIFICATION AUTOMATIQUE
+    // ✅ Fonction pour démarrer la vérification automatique
     const startStatusChecking = () => {
         const interval = setInterval(async () => {
             const updated = await checkOrderStatus();
@@ -102,11 +99,10 @@ export default function ConfirmationScreen({ navigation, route }) {
                 clearInterval(interval);
             }
         }, 10000);
-
         return interval;
     };
 
-    // ✅ EFFET POUR DÉMARRER LA VÉRIFICATION QUAND LE CHAT EST VISIBLE
+    // ✅ Effet pour démarrer la vérification quand le chat est visible
     useEffect(() => {
         let interval;
         if (isChatVisible && codeSuivi) {
@@ -144,6 +140,119 @@ export default function ConfirmationScreen({ navigation, route }) {
         setTimeout(() => addBotMessage("Un admin vous répondra sous peu."), 1000);
     };
 
+    // ✅ Vérifier le statut du paiement
+    const checkPaymentStatus = async (orderIdToCheck) => {
+        if (!orderIdToCheck) return false;
+        try {
+            const response = await api.get(`/payment/status/${orderIdToCheck}`);
+            console.log('📊 Statut paiement:', response.data);
+
+            if (response.data.statut === 'valide') {
+                setPaymentStatus('valide');
+                clearCart();
+                setIsOrderConfirmed(true);
+                setIsChatVisible(true);
+                Alert.alert(
+                    '✅ Paiement réussi !',
+                    'Votre commande est en cours de préparation.',
+                    [{ text: 'OK' }]
+                );
+                return true;
+            } else if (response.data.statut === 'en_attente') {
+                setPaymentStatus('en_attente');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Erreur vérification paiement:', error);
+            return false;
+        }
+    };
+
+    // ✅ Paiement avec Genius Pay
+    const handleGeniusPay = async (commandeId) => {
+        if (!commandeId) {
+            Alert.alert('Erreur', 'Aucune commande à payer');
+            return;
+        }
+
+        setIsPaying(true);
+        try {
+            console.log('💳 Initiation paiement Genius Pay pour commande:', commandeId);
+
+            const response = await api.post('/payment/initiate', {
+                order_id: commandeId,
+                currency: 'XOF'
+            });
+
+            console.log('✅ Réponse paiement:', response.data);
+
+            if (response.data.checkout_url) {
+                // Ouvrir l'URL de paiement
+                await Linking.openURL(response.data.checkout_url);
+
+                // Démarrer le suivi du paiement
+                await startPaymentTracking(commandeId);
+            } else {
+                Alert.alert('Erreur', 'URL de paiement non disponible');
+            }
+        } catch (error) {
+            console.error('❌ Erreur paiement:', error);
+            Alert.alert(
+                'Erreur',
+                error.response?.data?.message || 'Impossible d\'initier le paiement'
+            );
+        } finally {
+            setIsPaying(false);
+        }
+    };
+
+    // ✅ Suivi du paiement
+    const startPaymentTracking = (commandeId) => {
+        let attempts = 0;
+        const maxAttempts = 30; // 30 secondes
+
+        const checkStatus = async () => {
+            try {
+                const response = await api.get(`/payment/status/${commandeId}`);
+                console.log(`🔍 Tentative ${attempts + 1}:`, response.data);
+
+                if (response.data.statut === 'valide') {
+                    setPaymentStatus('valide');
+                    clearCart();
+                    setIsOrderConfirmed(true);
+                    setIsChatVisible(true);
+                    Alert.alert(
+                        '✅ Paiement réussi !',
+                        'Votre commande est en cours de préparation.',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                } else if (response.data.statut === 'failed') {
+                    Alert.alert(
+                        '❌ Paiement échoué',
+                        'Le paiement a été annulé ou a échoué. Veuillez réessayer.'
+                    );
+                    return;
+                }
+
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(checkStatus, 3000);
+                } else {
+                    Alert.alert(
+                        '⏳ En attente',
+                        'Votre paiement est en cours de traitement. Vous serez notifié dès son activation.'
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Erreur vérification paiement:', error);
+            }
+        };
+
+        setTimeout(checkStatus, 5000);
+    };
+
+    // ✅ Envoyer la commande au backend
     const envoyerCommandeAuBackend = async () => {
         if (!user) {
             Alert.alert('Erreur', 'Veuillez vous connecter');
@@ -151,23 +260,21 @@ export default function ConfirmationScreen({ navigation, route }) {
         }
 
         setLoading(true);
-
         try {
             const token = await AsyncStorage.getItem('token');
             console.log('🎫 Token présent:', token ? 'Oui' : 'Non');
 
-            // ✅ Construction des items avec quantity
             const itemsToSend = cartItems.map(item => ({
                 produit_id: item.id,
                 quantity: item.quantity || 1
             }));
 
-            console.log('📦 Items à envoyer:', itemsToSend); // ✅ Maintenant ça existe
+            console.log('📦 Items à envoyer:', itemsToSend);
 
             const commandeData = {
-                items: itemsToSend,  // 👈 Utilisation de la variable
+                items: itemsToSend,
                 adresse_livraison: `${destination.nom}\n${destination.adresse}\nTel: ${destination.telephone}`,
-                methode_paiement: selectedPaymentMethod,
+                methode_paiement: 'genius_pay',
                 numero_transaction: `PAIEMENT-${Date.now()}`,
                 distance: destination.distance || 0,
                 frais_livraison: deliveryFee,
@@ -182,18 +289,13 @@ export default function ConfirmationScreen({ navigation, route }) {
             console.log('✅ Réponse du backend:', response.data);
 
             const vraiCodeSuivi = response.data.code_suivi;
+            const vraiOrderId = response.data.commande_id;
+
             setCodeSuivi(vraiCodeSuivi);
+            setOrderId(vraiOrderId);
 
-            clearCart();
-
-            Alert.alert('✅ Succès', `Commande enregistrée\nCode: ${vraiCodeSuivi}`, [
-                {
-                    text: 'OK', onPress: () => {
-                        setIsOrderConfirmed(true);
-                        setIsChatVisible(true);
-                    }
-                }
-            ]);
+            // ✅ Payer avec Genius Pay - Passer l'ID directement
+            await handleGeniusPay(vraiOrderId);
 
         } catch (error) {
             console.log('❌ Erreur détaillée:', {
@@ -212,18 +314,17 @@ export default function ConfirmationScreen({ navigation, route }) {
     };
 
     const handleConfirmOrder = () => {
-        if (!selectedPaymentMethod) {
-            Alert.alert('Erreur', 'Sélectionnez un mode de paiement');
-            return;
-        }
-        Alert.alert('Confirmation', 'Avez-vous effectué le paiement ?', [
-            { text: 'Non', style: 'cancel' },
-            { text: 'Oui', onPress: envoyerCommandeAuBackend }
-        ]);
-    };
-
-    const handleCopyNumber = (numero) => {
-        Alert.alert('✅ Copié', `Numéro ${numero} copié`);
+        Alert.alert(
+            'Confirmation',
+            'Souhaitez-vous confirmer cette commande ?',
+            [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                    text: 'Confirmer',
+                    onPress: envoyerCommandeAuBackend
+                }
+            ]
+        );
     };
 
     return (
@@ -250,6 +351,7 @@ export default function ConfirmationScreen({ navigation, route }) {
 
                     {/* Code */}
                     <Animated.View style={[styles.codeCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+                        <Text style={styles.codeLabel}>Votre code de suivi</Text>
                         <Text style={styles.codeValue}>{codeSuivi}</Text>
                     </Animated.View>
 
@@ -267,33 +369,20 @@ export default function ConfirmationScreen({ navigation, route }) {
                         <Text style={styles.deliveryText}>{getDeliveryLabel(deliveryOption)}</Text>
                     </Animated.View>
 
-                    {/* Paiement */}
-                    <Animated.View style={[styles.paymentSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-                        <Text style={styles.paymentWarning}>⚠️ Payez avant de confirmer</Text>
-                        {MOBILE_MONEY_ACCOUNTS.map((account) => (
-                            <TouchableOpacity
-                                key={account.id}
-                                style={[styles.paymentCard, selectedPaymentMethod === account.id && styles.paymentCardSelected]}
-                                onPress={() => setSelectedPaymentMethod(account.id)}
-                            >
-                                <View style={[styles.paymentIcon, { backgroundColor: account.couleur + '20' }]}>
-                                    <Icon name={account.icon} size={24} color={account.couleur} />
-                                </View>
-                                <View style={styles.paymentInfo}>
-                                    <Text style={styles.paymentName}>{account.nom}</Text>
-                                    <View style={styles.paymentNumberContainer}>
-                                        <Text>{account.numero}</Text>
-                                        <TouchableOpacity onPress={() => handleCopyNumber(account.numero)}>
-                                            <Icon name="content-copy" size={16} color="#FF6B6B" />
-                                        </TouchableOpacity>
-                                    </View>
-                                    <Text>{account.titulaire}</Text>
-                                </View>
-                                {selectedPaymentMethod === account.id && (
-                                    <Icon name="check-circle" size={24} color="#4CAF50" />
-                                )}
-                            </TouchableOpacity>
-                        ))}
+                    {/* ✅ Paiement Genius Pay - Information */}
+                    <Animated.View style={[styles.paymentInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+                        <View style={styles.paymentIconContainer}>
+                            <Icon name="credit-card" size={30} color="#25D366" />
+                        </View>
+                        <View style={styles.paymentInfoContent}>
+                            <Text style={styles.paymentInfoTitle}>💳 Genius Pay</Text>
+                            <Text style={styles.paymentInfoText}>
+                                Paiement sécurisé par carte ou Mobile Money
+                            </Text>
+                            <View style={styles.paymentBadge}>
+                                <Text style={styles.paymentBadgeText}>✅ Sécurisé</Text>
+                            </View>
+                        </View>
                     </Animated.View>
 
                     {/* Articles */}
@@ -336,11 +425,15 @@ export default function ConfirmationScreen({ navigation, route }) {
 
                     {/* Bouton */}
                     <TouchableOpacity
-                        style={[styles.confirmButton, (!selectedPaymentMethod || loading) && styles.confirmButtonDisabled]}
+                        style={[styles.confirmButton, loading && styles.confirmButtonDisabled]}
                         onPress={handleConfirmOrder}
-                        disabled={!selectedPaymentMethod || loading}
+                        disabled={loading || isPaying}
                     >
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmButtonText}>J'ai payé</Text>}
+                        {loading || isPaying ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.confirmButtonText}>💳 Payer avec Genius Pay</Text>
+                        )}
                     </TouchableOpacity>
                 </ScrollView>
             ) : (
@@ -366,7 +459,6 @@ export default function ConfirmationScreen({ navigation, route }) {
                             <TouchableOpacity
                                 onPress={() => {
                                     setIsChatVisible(false);
-
                                     navigation.getParent()?.replace('Commandes');
                                 }}
                             >
@@ -374,6 +466,7 @@ export default function ConfirmationScreen({ navigation, route }) {
                             </TouchableOpacity>
                         </View>
                     </View>
+
                     <ScrollView style={styles.chatMessages}>
                         {chatMessages.map(msg => (
                             <View key={msg.id} style={[styles.messageRow, msg.isBot ? styles.botMessageRow : styles.userMessageRow]}>
@@ -384,14 +477,36 @@ export default function ConfirmationScreen({ navigation, route }) {
                         ))}
                         {isOrderConfirmed && (
                             <View style={styles.waitingContainer}>
-                                <ActivityIndicator size="large" color="#FF6B6B" />
-                                <Text style={styles.waitingText}>En attente de validation admin...</Text>
-                                <Text style={styles.waitingSubText}>Statut actuel: {getStatusLabel(orderStatus)}</Text>
+                                {paymentStatus === 'valide' ? (
+                                    <>
+                                        <Icon name="check-circle" size={50} color="#4CAF50" />
+                                        <Text style={styles.waitingText}>✅ Paiement validé !</Text>
+                                        <Text style={styles.waitingSubText}>Votre commande est en cours de préparation</Text>
+                                    </>
+                                ) : paymentStatus === 'en_attente' ? (
+                                    <>
+                                        <ActivityIndicator size="large" color="#FF6B6B" />
+                                        <Text style={styles.waitingText}>⏳ En attente de validation...</Text>
+                                        <Text style={styles.waitingSubText}>Statut: {getStatusLabel(orderStatus)}</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ActivityIndicator size="large" color="#FF6B6B" />
+                                        <Text style={styles.waitingText}>⏳ En attente de paiement...</Text>
+                                        <Text style={styles.waitingSubText}>Veuillez finaliser le paiement sur Genius Pay</Text>
+                                    </>
+                                )}
                             </View>
                         )}
                     </ScrollView>
+
                     <View style={styles.chatInputContainer}>
-                        <TextInput style={styles.chatInput} value={messageText} onChangeText={setMessageText} placeholder="Message..." />
+                        <TextInput
+                            style={styles.chatInput}
+                            value={messageText}
+                            onChangeText={setMessageText}
+                            placeholder="Message..."
+                        />
                         <TouchableOpacity onPress={handleSendMessage}>
                             <Icon name="send" size={24} color="#FF6B6B" />
                         </TouchableOpacity>
@@ -411,19 +526,44 @@ const styles = StyleSheet.create({
     checkCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#4CAF50', justifyContent: 'center', alignItems: 'center' },
     title: { fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 20 },
     codeCard: { backgroundColor: '#FF6B6B10', margin: 15, padding: 15, borderRadius: 15, borderWidth: 2, borderColor: '#FF6B6B', borderStyle: 'dashed', alignItems: 'center' },
+    codeLabel: { fontSize: 12, color: '#666', marginBottom: 5 },
     codeValue: { fontSize: 18, fontWeight: 'bold', color: '#333' },
     card: { backgroundColor: '#f9f9f9', marginHorizontal: 15, marginBottom: 10, padding: 15, borderRadius: 15 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#FF6B6B' },
     bold: { fontWeight: 'bold' },
     deliveryText: { fontSize: 16, color: '#FF6B6B', fontWeight: '500' },
-    paymentSection: { marginHorizontal: 15, marginBottom: 15 },
-    paymentWarning: { backgroundColor: '#FFA50020', color: '#FFA500', padding: 12, borderRadius: 10, marginBottom: 15, textAlign: 'center', fontWeight: '500' },
-    paymentCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', padding: 15, borderRadius: 12, marginBottom: 10, borderWidth: 2, borderColor: 'transparent' },
-    paymentCardSelected: { borderColor: '#FF6B6B', backgroundColor: '#fff' },
-    paymentIcon: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-    paymentInfo: { flex: 1 },
-    paymentName: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-    paymentNumberContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    paymentInfoCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E9',
+        marginHorizontal: 15,
+        marginBottom: 15,
+        padding: 15,
+        borderRadius: 15,
+        borderWidth: 2,
+        borderColor: '#25D366',
+    },
+    paymentIconContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#25D366',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    paymentInfoContent: { flex: 1 },
+    paymentInfoTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+    paymentInfoText: { fontSize: 12, color: '#666', marginTop: 4 },
+    paymentBadge: {
+        backgroundColor: '#25D366',
+        paddingHorizontal: 10,
+        paddingVertical: 2,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: 4,
+    },
+    paymentBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
     itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
     price: { fontWeight: '500' },
     totalCard: { backgroundColor: '#FF6B6B10', margin: 15, padding: 15, borderRadius: 15 },
@@ -434,7 +574,7 @@ const styles = StyleSheet.create({
     grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 2, borderTopColor: '#FF6B6B30' },
     grandTotalLabel: { fontSize: 16, fontWeight: 'bold' },
     grandTotalValue: { fontSize: 20, fontWeight: 'bold', color: '#FF6B6B' },
-    confirmButton: { backgroundColor: '#4CAF50', margin: 15, padding: 15, borderRadius: 12, alignItems: 'center' },
+    confirmButton: { backgroundColor: '#25D366', margin: 15, padding: 15, borderRadius: 12, alignItems: 'center' },
     confirmButtonDisabled: { backgroundColor: '#ccc' },
     confirmButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
     chatContainer: { flex: 1, backgroundColor: '#f5f5f5' },
@@ -454,6 +594,6 @@ const styles = StyleSheet.create({
     chatInputContainer: { flexDirection: 'row', padding: 15, backgroundColor: '#fff', borderTopWidth: 1 },
     chatInput: { flex: 1, backgroundColor: '#f5f5f5', padding: 10, borderRadius: 20, marginRight: 10 },
     waitingContainer: { alignItems: 'center', padding: 30 },
-    waitingText: { marginTop: 10, color: '#666', textAlign: 'center' },
-    waitingSubText: { marginTop: 5, color: '#999', textAlign: 'center', fontSize: 12 },
+    waitingText: { marginTop: 10, color: '#333', textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
+    waitingSubText: { marginTop: 5, color: '#666', textAlign: 'center', fontSize: 14 },
 });
