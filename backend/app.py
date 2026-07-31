@@ -1221,7 +1221,7 @@ def get_admin_stats_detailed():
     # Ventes par catégorie formatée
     categories_list = [
         {'nom': cat, 'total': ventes_par_categorie.get(cat, 0)} 
-        for cat in ['Ingrédients', 'Boissons', 'Poissons']
+        for cat in ['Ingrédients', 'Boissons', 'Poissons','Viandes','Legumes','Fruits','Epices','Sauces','Patisserie','Produits Laitiers','Cereales','Conserves']
     ]
     
     return jsonify({
