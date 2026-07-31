@@ -1,8 +1,6 @@
 // src/utils/constants.js
 
-// ============================================================
-// ✅ API URL - UNE SEULE DÉFINITION (CORRECTE)
-// ============================================================
+// ✅ URL CORRECTE
 export const API_URL = 'https://swamapp-production.up.railway.app/api';
 
 // ============================================================

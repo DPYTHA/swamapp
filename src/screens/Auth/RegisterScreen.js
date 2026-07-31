@@ -1,3 +1,4 @@
+// src/screens/RegisterScreen.js
 import { useState } from 'react';
 import {
     Alert,
@@ -13,7 +14,6 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../hooks/useAuth';
 
-
 export default function RegisterScreen({ navigation }) {
     const [nom, setNom] = useState('');
     const [telephone, setTelephone] = useState('');
@@ -22,12 +22,6 @@ export default function RegisterScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
 
-
-    console.log('🔥🔥🔥 REGISTER CLICKED 🔥🔥🔥');
-console.log('📞 Telephone:', telephone);
-console.log('🔑 Password:', motDePasse);
-console.log('👤 Nom:', nom);
-console.log('🔍 Register function:', typeof register);
     const handleRegister = async () => {
         // Validations
         if (!telephone || !motDePasse) {
@@ -52,7 +46,6 @@ console.log('🔍 Register function:', typeof register);
         if (!result.success) {
             Alert.alert('Erreur', result.message);
         } else {
-            // ✅ Message de succès et redirection vers Login
             Alert.alert(
                 '🎉 Inscription réussie !',
                 'Merci de vous être inscrit sur SWAM ! Veuillez vous connecter.',
@@ -151,7 +144,6 @@ console.log('🔍 Register function:', typeof register);
     );
 }
 
-// Styles inchangés
 const styles = StyleSheet.create({
     container: {
         flex: 1,

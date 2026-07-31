@@ -3,10 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useEffect, useState } from 'react';
 import api from '../services/api';
 
-// 1. Création et EXPORT du contexte
 export const AuthContext = createContext(null);
 
-// 2. Provider component
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +21,7 @@ export const AuthProvider = ({ children }) => {
 
             if (token) {
                 api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                // ✅ URL correcte : /profile (sans /api)
                 const response = await api.get('/profile');
                 console.log('✅ Profil chargé:', response.data);
                 setUser(response.data);
@@ -42,6 +41,7 @@ export const AuthProvider = ({ children }) => {
     const login = async (telephone, mot_de_passe) => {
         try {
             console.log('🔑 Tentative login...');
+            // ✅ URL correcte : /login (sans /api)
             const response = await api.post('/login', { telephone, mot_de_passe });
             const { token, user } = response.data;
 
@@ -67,6 +67,7 @@ export const AuthProvider = ({ children }) => {
         try {
             console.log('📝 Tentative inscription:', { telephone, nom });
 
+            // ✅ URL correcte : /register (sans /api)
             const response = await api.post('/register', {
                 telephone,
                 mot_de_passe,
@@ -119,4 +120,3 @@ export const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
-

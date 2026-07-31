@@ -1,3 +1,4 @@
+// src/screens/LoginScreen.js
 import { useState } from 'react';
 import {
     Alert,
@@ -32,8 +33,7 @@ export default function LoginScreen({ navigation }) {
         if (!result.success) {
             Alert.alert('Erreur', result.message);
         }
-        // ✅ Pas besoin de navigation ici - AuthContext mettra à jour user
-        // et AppNavigator affichera automatiquement MainTabs
+        // ✅ La navigation est gérée par AppNavigator via le contexte
     };
 
     return (
@@ -92,6 +92,7 @@ export default function LoginScreen({ navigation }) {
                             Pas encore de compte ? <Text style={styles.linkBold}>S'inscrire</Text>
                         </Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
                         style={styles.forgotPassword}
                         onPress={() => navigation.navigate('ForgotPassword')}
@@ -122,14 +123,6 @@ const styles = StyleSheet.create({
         fontSize: 48,
         fontWeight: 'bold',
         color: '#FF6B6B',
-    },
-    forgotPassword: {
-        alignSelf: 'flex-end',
-        marginBottom: 30,
-    },
-    forgotPasswordText: {
-        color: '#FF6B6B',
-        fontSize: 14,
     },
     slogan: {
         fontSize: 16,
@@ -188,5 +181,13 @@ const styles = StyleSheet.create({
     linkBold: {
         color: '#FF6B6B',
         fontWeight: 'bold',
+    },
+    forgotPassword: {
+        marginTop: 10,
+        alignItems: 'center',
+    },
+    forgotPasswordText: {
+        fontSize: 14,
+        color: '#FF6B6B',
     },
 });
