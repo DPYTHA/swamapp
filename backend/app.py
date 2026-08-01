@@ -113,7 +113,7 @@ def upload_image_to_cloudinary(file, folder="swam/products"):
             folder=folder,
             allowed_formats=["jpg", "jpeg", "png", "gif", "webp"],
             transformation=[
-                {"width": 800, "height": 800, "crop": "limit"},
+                {"width": 600, "height": 600, "crop": "limit"},
                 {"quality": "auto"}
             ]
         )
@@ -1131,6 +1131,33 @@ def delete_produit(produit_id):
     except Exception as e:
         db.session.rollback()
         print(f"❌ Erreur suppression produit: {e}")
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/produits/<int:produit_id>', methods=['GET'])
+@jwt_required()
+def admin_get_produit(produit_id):
+    """Récupère un produit par son ID"""
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produit = Produit.query.get_or_404(produit_id)
+        
+        return jsonify({
+            'id': produit.id,
+            'nom': produit.nom,
+            'description': produit.description,
+            'prix': produit.prix,
+            'categorie': produit.categorie,
+            'stock': produit.stock,
+            'image_url': produit.image_url
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erreur récupération produit: {e}")
         return jsonify({'message': 'Erreur serveur'}), 500
 
 # ===================== ROUTES ADMIN LIVREURS =====================
