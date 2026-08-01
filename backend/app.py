@@ -3,7 +3,7 @@ print("=== DÉMARRAGE ===", file=sys.stderr)
 sys.stderr.flush()
 
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, send_from_directory
     print("✓ Flask importé", file=sys.stderr)
 except Exception as e:
     print(f"❌ Erreur import Flask: {e}", file=sys.stderr)
@@ -38,6 +38,7 @@ import random
 import logging
 import string
 import os
+import uuid
 from functools import wraps
 from dotenv import load_dotenv
 
@@ -65,7 +66,27 @@ else:
 
 # ================== CLOUDINARY CONFIG ==================
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
 CLOUDINARY_UPLOAD_PRESET = os.getenv("CLOUDINARY_UPLOAD_PRESET")
+
+# Configuration Cloudinary si les clés sont présentes
+CLOUDINARY_ENABLED = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+
+if CLOUDINARY_ENABLED:
+    try:
+        import cloudinary
+        import cloudinary.uploader
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET,
+            secure=True
+        )
+        print("✓ Cloudinary configuré", file=sys.stderr)
+    except Exception as e:
+        print(f"❌ Erreur Cloudinary: {e}", file=sys.stderr)
+        CLOUDINARY_ENABLED = False
 
 # ================== CONFIG ==================
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret')
@@ -73,11 +94,76 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max
 
 # ================== INIT ==================
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
+
+# ================== FONCTIONS UPLOAD IMAGE ==================
+def upload_image_to_cloudinary(file, folder="swam/products"):
+    """Upload une image vers Cloudinary"""
+    if not CLOUDINARY_ENABLED:
+        return None
+    
+    try:
+        result = cloudinary.uploader.upload(
+            file,
+            folder=folder,
+            allowed_formats=["jpg", "jpeg", "png", "gif", "webp"],
+            transformation=[
+                {"width": 800, "height": 800, "crop": "limit"},
+                {"quality": "auto"}
+            ]
+        )
+        return result.get("secure_url")
+    except Exception as e:
+        print(f"❌ Erreur upload Cloudinary: {e}")
+        return None
+
+def delete_image_from_cloudinary(url):
+    """Supprime une image de Cloudinary à partir de son URL"""
+    if not CLOUDINARY_ENABLED or not url:
+        return False
+    
+    try:
+        # Extraire le public_id de l'URL
+        if "cloudinary" not in url:
+            return False
+        
+        parts = url.split("/")
+        try:
+            upload_index = parts.index("upload")
+            public_parts = parts[upload_index + 2:]  # Skip version
+            public_id = "/".join(public_parts).split(".")[0]
+            
+            if public_id:
+                result = cloudinary.uploader.destroy(public_id)
+                return result.get("result") == "ok"
+        except:
+            return False
+    except Exception as e:
+        print(f"❌ Erreur suppression Cloudinary: {e}")
+        return False
+
+def upload_image_local(file):
+    """Upload une image localement (fallback)"""
+    try:
+        # Créer le dossier uploads
+        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Générer un nom unique
+        ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
+        filename = f"{uuid.uuid4()}.{ext}"
+        file_path = os.path.join(upload_dir, filename)
+        file.save(file_path)
+        
+        return f"{request.host_url}uploads/{filename}"
+    except Exception as e:
+        print(f"❌ Erreur upload local: {e}")
+        return None
 
 # ================== ROUTE TEST ==================
 @app.route('/')
@@ -86,7 +172,7 @@ def health():
     return jsonify({
         "status": "OK",
         "database": database_url is not None,
-        "cloudinary": bool(CLOUDINARY_CLOUD_NAME)
+        "cloudinary": CLOUDINARY_ENABLED
     })
 
 # ================== GENIUS PAY CONFIG ==================
@@ -97,6 +183,12 @@ GENIUS_PAY_WEBHOOK_SECRET = os.getenv("GENIUS_PAY_WEBHOOK_SECRET", "")
 GENIUS_PAY_REDIRECT_URL = os.getenv("GENIUS_PAY_REDIRECT_URL", "https://swamapp-production.up.railway.app/api/payment/redirect")
 GENIUS_PAY_CALLBACK_URL = os.getenv("GENIUS_PAY_CALLBACK_URL", "https://swamapp-production.up.railway.app/api/payment/webhook")
 
+# ===================== ROUTE UPLOAD IMAGES =====================
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    """Sert les images uploadées localement"""
+    upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+    return send_from_directory(upload_dir, filename)
 
 # ===================== MODELES =====================
 class User(db.Model):
@@ -615,7 +707,7 @@ def create_commande():
         )
         db.session.add(detail)
 
-    # ✅ Utiliser create_paiement_auto pour le paiement
+    # Utiliser create_paiement_auto pour le paiement
     nouveau_paiement = create_paiement_auto(new_commande.id, total_final, data['methode_paiement'])
 
     db.session.commit()
@@ -781,8 +873,7 @@ def get_admin_stats():
         'chiffre_affaires_mois': chiffre_affaires_mois
     }), 200
 
-
-# backend/app.py - Ajouter cette route
+# ===================== ROUTES ADMIN UPLOAD IMAGE =====================
 
 @app.route('/api/admin/upload-image', methods=['POST'])
 @jwt_required()
@@ -802,21 +893,248 @@ def admin_upload_image():
         if file.filename == '':
             return jsonify({'message': 'Fichier vide'}), 400
         
-        # Upload vers Cloudinary
-        from cloudinary_config import upload_image
-        url = upload_image(file, "swam/products")
+        # Vérifier l'extension
+        allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+        if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+            return jsonify({'message': 'Format d\'image non supporté. Utilisez JPG, PNG, GIF ou WEBP.'}), 400
+        
+        # Vérifier la taille (max 5MB)
+        file.seek(0, 2)  # Aller à la fin du fichier
+        size = file.tell()
+        file.seek(0)  # Revenir au début
+        if size > 5 * 1024 * 1024:  # 5MB
+            return jsonify({'message': 'L\'image ne doit pas dépasser 5MB.'}), 400
+        
+        # Upload vers Cloudinary ou local
+        url = None
+        if CLOUDINARY_ENABLED:
+            url = upload_image_to_cloudinary(file, "swam/products")
+        
+        # Fallback vers local si Cloudinary échoue ou n'est pas configuré
+        if not url:
+            url = upload_image_local(file)
         
         if url:
-            return jsonify({'image_url': url}), 200
+            return jsonify({
+                'image_url': url,
+                'message': 'Image uploadée avec succès',
+                'cloudinary': CLOUDINARY_ENABLED
+            }), 200
         else:
-            return jsonify({'message': 'Erreur lors de l\'upload'}), 500
+            return jsonify({'message': 'Erreur lors de l\'upload de l\'image'}), 500
             
     except Exception as e:
         print(f"❌ Erreur upload image: {e}")
         return jsonify({'message': str(e)}), 500
 
+@app.route('/api/admin/produits/<int:produit_id>/image', methods=['DELETE'])
+@jwt_required()
+def admin_delete_product_image(produit_id):
+    """Supprime l'image d'un produit"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user or user.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produit = Produit.query.get_or_404(produit_id)
+        
+        if not produit.image_url:
+            return jsonify({'message': 'Aucune image à supprimer'}), 400
+        
+        # Supprimer de Cloudinary si c'est une URL Cloudinary
+        if "cloudinary" in produit.image_url and CLOUDINARY_ENABLED:
+            delete_image_from_cloudinary(produit.image_url)
+        
+        # Supprimer l'URL de la base de données
+        produit.image_url = None
+        db.session.commit()
+        
+        return jsonify({'message': 'Image supprimée avec succès'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erreur suppression image: {e}")
+        return jsonify({'message': str(e)}), 500
+
+# ===================== ROUTES ADMIN PRODUITS =====================
+
+@app.route('/api/admin/produits', methods=['GET'])
+@jwt_required()
+def admin_get_produits():
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produits = Produit.query.order_by(Produit.date_ajout.desc()).all()
+        
+        return jsonify([{
+            'id': p.id,
+            'nom': p.nom,
+            'description': p.description,
+            'prix': p.prix,
+            'categorie': p.categorie,
+            'stock': p.stock,
+            'image_url': p.image_url
+        } for p in produits]), 200
+    except Exception as e:
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/produits', methods=['POST'])
+@jwt_required()
+def create_produit():
+    """Crée un nouveau produit avec image"""
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        data = request.get_json()
+        
+        if not data.get('nom') or not data.get('prix'):
+            return jsonify({'message': 'Nom et prix requis'}), 400
+        
+        # Vérifier si le prix est valide
+        try:
+            prix = float(data['prix'])
+            if prix <= 0:
+                return jsonify({'message': 'Le prix doit être supérieur à 0'}), 400
+        except ValueError:
+            return jsonify({'message': 'Prix invalide'}), 400
+        
+        # Vérifier le stock
+        stock = int(data.get('stock', 0))
+        if stock < 0:
+            return jsonify({'message': 'Le stock ne peut pas être négatif'}), 400
+        
+        nouveau_produit = Produit(
+            nom=data['nom'].strip(),
+            description=data.get('description', '').strip(),
+            prix=prix,
+            categorie=data.get('categorie', 'Ingrédients'),
+            stock=stock,
+            image_url=data.get('image_url')
+        )
+        
+        db.session.add(nouveau_produit)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Produit créé avec succès',
+            'produit': {
+                'id': nouveau_produit.id,
+                'nom': nouveau_produit.nom,
+                'prix': nouveau_produit.prix,
+                'categorie': nouveau_produit.categorie,
+                'stock': nouveau_produit.stock,
+                'image_url': nouveau_produit.image_url
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erreur création produit: {e}")
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/produits/<int:produit_id>', methods=['PUT'])
+@jwt_required()
+def update_produit(produit_id):
+    """Met à jour un produit existant"""
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produit = Produit.query.get_or_404(produit_id)
+        data = request.get_json()
+        
+        if 'nom' in data and data['nom']:
+            produit.nom = data['nom'].strip()
+        
+        if 'description' in data:
+            produit.description = data['description'].strip()
+        
+        if 'prix' in data:
+            try:
+                prix = float(data['prix'])
+                if prix <= 0:
+                    return jsonify({'message': 'Le prix doit être supérieur à 0'}), 400
+                produit.prix = prix
+            except ValueError:
+                return jsonify({'message': 'Prix invalide'}), 400
+        
+        if 'categorie' in data and data['categorie']:
+            produit.categorie = data['categorie']
+        
+        if 'stock' in data:
+            stock = int(data['stock'])
+            if stock < 0:
+                return jsonify({'message': 'Le stock ne peut pas être négatif'}), 400
+            produit.stock = stock
+        
+        if 'image_url' in data:
+            # Si une nouvelle image est fournie, supprimer l'ancienne de Cloudinary
+            if data['image_url'] != produit.image_url and produit.image_url:
+                if "cloudinary" in produit.image_url and CLOUDINARY_ENABLED:
+                    delete_image_from_cloudinary(produit.image_url)
+            produit.image_url = data['image_url']
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Produit modifié avec succès',
+            'produit': {
+                'id': produit.id,
+                'nom': produit.nom,
+                'prix': produit.prix,
+                'categorie': produit.categorie,
+                'stock': produit.stock,
+                'image_url': produit.image_url
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erreur mise à jour produit: {e}")
+        return jsonify({'message': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/produits/<int:produit_id>', methods=['DELETE'])
+@jwt_required()
+def delete_produit(produit_id):
+    """Supprime un produit et son image"""
+    try:
+        current_user_id = get_jwt_identity()
+        admin = User.query.get(current_user_id)
+        
+        if not admin or admin.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        produit = Produit.query.get_or_404(produit_id)
+        
+        # Supprimer l'image de Cloudinary si elle existe
+        if produit.image_url and "cloudinary" in produit.image_url and CLOUDINARY_ENABLED:
+            delete_image_from_cloudinary(produit.image_url)
+        
+        db.session.delete(produit)
+        db.session.commit()
+        
+        return jsonify({'message': 'Produit supprimé avec succès'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erreur suppression produit: {e}")
+        return jsonify({'message': 'Erreur serveur'}), 500
+
 # ===================== ROUTES ADMIN LIVREURS =====================
-# GET /api/admin/livreurs - Liste tous les livreurs
+
 @app.route('/api/admin/livreurs', methods=['GET'])
 @jwt_required()
 def get_all_livreurs():
@@ -847,7 +1165,6 @@ def get_all_livreurs():
         })
     
     return jsonify(result), 200
-
 
 # GET /api/admin/livreurs-disponibles - Liste des livreurs disponibles
 @app.route('/api/admin/livreurs-disponibles', methods=['GET'])
@@ -1990,95 +2307,6 @@ def reset_password():
     db.session.commit()
     
     return jsonify({'message': 'Mot de passe réinitialisé avec succès'}), 200
-
-# ===================== ROUTES ADMIN PRODUITS =====================
-@app.route('/api/admin/produits', methods=['GET'])
-@jwt_required()
-def admin_get_produits():
-    try:
-        current_user_id = get_jwt_identity()
-        admin = User.query.get(current_user_id)
-        
-        if not admin or admin.role != 'admin':
-            return jsonify({'message': 'Accès non autorisé'}), 403
-        
-        produits = Produit.query.order_by(Produit.date_ajout.desc()).all()
-        
-        return jsonify([{
-            'id': p.id,
-            'nom': p.nom,
-            'description': p.description,
-            'prix': p.prix,
-            'categorie': p.categorie,
-            'stock': p.stock,
-            'image_url': p.image_url
-        } for p in produits]), 200
-    except Exception as e:
-        return jsonify({'message': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/produits', methods=['POST'])
-@jwt_required()
-def create_produit():
-    try:
-        current_user_id = get_jwt_identity()
-        admin = User.query.get(current_user_id)
-        
-        if not admin or admin.role != 'admin':
-            return jsonify({'message': 'Accès non autorisé'}), 403
-        
-        data = request.get_json()
-        
-        if not data.get('nom') or not data.get('prix'):
-            return jsonify({'message': 'Nom et prix requis'}), 400
-        
-        nouveau_produit = Produit(
-            nom=data['nom'],
-            description=data.get('description', ''),
-            prix=float(data['prix']),
-            categorie=data.get('categorie', 'Ingrédients'),
-            stock=int(data.get('stock', 0)),
-            image_url=data.get('image_url')
-        )
-        
-        db.session.add(nouveau_produit)
-        db.session.commit()
-        
-        return jsonify({'message': 'Produit créé avec succès'}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'message': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/produits/<int:produit_id>', methods=['PUT'])
-@jwt_required()
-def update_produit(produit_id):
-    try:
-        current_user_id = get_jwt_identity()
-        admin = User.query.get(current_user_id)
-        
-        if not admin or admin.role != 'admin':
-            return jsonify({'message': 'Accès non autorisé'}), 403
-        
-        produit = Produit.query.get_or_404(produit_id)
-        data = request.get_json()
-        
-        if 'nom' in data:
-            produit.nom = data['nom']
-        if 'description' in data:
-            produit.description = data['description']
-        if 'prix' in data:
-            produit.prix = float(data['prix'])
-        if 'categorie' in data:
-            produit.categorie = data['categorie']
-        if 'stock' in data:
-            produit.stock = int(data['stock'])
-        if 'image_url' in data:
-            produit.image_url = data['image_url']
-        
-        db.session.commit()
-        return jsonify({'message': 'Produit modifié avec succès'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'message': 'Erreur serveur'}), 500
 
 # ===================== FONCTIONS GENIUS PAY =====================
 
