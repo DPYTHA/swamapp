@@ -1159,7 +1159,6 @@ def admin_get_produit(produit_id):
     except Exception as e:
         print(f"❌ Erreur récupération produit: {e}")
         return jsonify({'message': 'Erreur serveur'}), 500
-
 # ===================== ROUTES ADMIN LIVREURS =====================
 
 @app.route('/api/admin/livreurs', methods=['GET'])
