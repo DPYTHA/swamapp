@@ -16,6 +16,51 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 // URL de votre backend
 const API_URL = 'https://swamapp-production.up.railway.app';
 
+// Image placeholder en ligne
+const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/70x70/FF6B6B/FFFFFF?text=Image';
+
+// Composant ProductItem (extrait pour éviter les hooks dans renderProduct)
+const ProductItem = ({ item, onPress }) => {
+    const [imageError, setImageError] = useState(false);
+
+    return (
+        <TouchableOpacity
+            style={styles.productCard}
+            onPress={onPress}
+            activeOpacity={0.8}
+        >
+            <View style={styles.productImageContainer}>
+                {item.image_url && !imageError ? (
+                    <Image
+                        source={{ uri: item.image_url }}
+                        style={styles.productImage}
+                        defaultSource={{ uri: PLACEHOLDER_IMAGE }}
+                        onError={() => setImageError(true)}
+                    />
+                ) : (
+                    <View style={styles.imagePlaceholder}>
+                        <Icon name="image" size={30} color="#ccc" />
+                    </View>
+                )}
+            </View>
+            <View style={styles.productInfo}>
+                <Text style={styles.productName} numberOfLines={1}>{item.nom}</Text>
+                <Text style={styles.productCategory}>{item.categorie}</Text>
+                <Text style={styles.productPrice}>{item.prix.toLocaleString()} FCFA</Text>
+                {item.stock !== undefined && (
+                    <Text style={[
+                        styles.stockText,
+                        item.stock > 0 ? styles.inStock : styles.outOfStock
+                    ]}>
+                        {item.stock > 0 ? `✅ ${item.stock} en stock` : '❌ Rupture de stock'}
+                    </Text>
+                )}
+            </View>
+            <Icon name="chevron-right" size={24} color="#FF6B6B" />
+        </TouchableOpacity>
+    );
+};
+
 export default function ProductsListScreen({ navigation, route }) {
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
@@ -32,7 +77,6 @@ export default function ProductsListScreen({ navigation, route }) {
             setError(null);
             const token = await AsyncStorage.getItem('userToken');
 
-            // Construire l'URL avec les paramètres
             let url = `${API_URL}/api/produits`;
             if (selectedCategory && selectedCategory !== 'Tous' && selectedCategory !== 'all') {
                 url += `?categorie=${encodeURIComponent(selectedCategory)}`;
@@ -61,12 +105,10 @@ export default function ProductsListScreen({ navigation, route }) {
         }
     }, [selectedCategory]);
 
-    // Charger les produits au montage
     useEffect(() => {
         fetchProducts();
     }, [fetchProducts]);
 
-    // Filtrer les produits lors de la recherche
     useEffect(() => {
         const filtered = products.filter(p =>
             p.nom.toLowerCase().includes(searchQuery.toLowerCase())
@@ -74,53 +116,22 @@ export default function ProductsListScreen({ navigation, route }) {
         setFilteredProducts(filtered);
     }, [searchQuery, products]);
 
-    // Rafraîchir la liste
     const onRefresh = () => {
         setRefreshing(true);
         fetchProducts();
     };
 
-    // Rendu d'un produit
+    // Rendu d'un produit (sans hooks)
     const renderProduct = ({ item }) => (
-        <TouchableOpacity
-            style={styles.productCard}
+        <ProductItem
+            item={item}
             onPress={() => navigation.navigate('ProductDetail', {
                 productId: item.id,
                 product: item
             })}
-            activeOpacity={0.8}
-        >
-            <View style={styles.productImageContainer}>
-                {item.image_url ? (
-                    <Image
-                        source={{ uri: item.image_url }}
-                        style={styles.productImage}
-                        defaultSource={require('../assets/placeholder.png')}
-                    />
-                ) : (
-                    <View style={styles.imagePlaceholder}>
-                        <Icon name="image" size={30} color="#ccc" />
-                    </View>
-                )}
-            </View>
-            <View style={styles.productInfo}>
-                <Text style={styles.productName} numberOfLines={1}>{item.nom}</Text>
-                <Text style={styles.productCategory}>{item.categorie}</Text>
-                <Text style={styles.productPrice}>{item.prix.toLocaleString()} FCFA</Text>
-                {item.stock !== undefined && (
-                    <Text style={[
-                        styles.stockText,
-                        item.stock > 0 ? styles.inStock : styles.outOfStock
-                    ]}>
-                        {item.stock > 0 ? `✅ ${item.stock} en stock` : '❌ Rupture de stock'}
-                    </Text>
-                )}
-            </View>
-            <Icon name="chevron-right" size={24} color="#FF6B6B" />
-        </TouchableOpacity>
+        />
     );
 
-    // Affichage du chargement
     if (loading) {
         return (
             <View style={styles.centerContainer}>
@@ -130,7 +141,6 @@ export default function ProductsListScreen({ navigation, route }) {
         );
     }
 
-    // Affichage de l'erreur
     if (error) {
         return (
             <View style={styles.centerContainer}>
@@ -145,7 +155,6 @@ export default function ProductsListScreen({ navigation, route }) {
 
     return (
         <View style={styles.container}>
-            {/* Barre de recherche */}
             <View style={styles.searchContainer}>
                 <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
                 <TextInput
@@ -162,7 +171,6 @@ export default function ProductsListScreen({ navigation, route }) {
                 ) : null}
             </View>
 
-            {/* Filtre par catégorie */}
             {selectedCategory && (
                 <View style={styles.filterBar}>
                     <Text style={styles.filterText}>
@@ -179,14 +187,12 @@ export default function ProductsListScreen({ navigation, route }) {
                 </View>
             )}
 
-            {/* Compteur de produits */}
             <View style={styles.counterContainer}>
                 <Text style={styles.counterText}>
                     {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} trouvé{filteredProducts.length > 1 ? 's' : ''}
                 </Text>
             </View>
 
-            {/* Liste des produits */}
             <FlatList
                 data={filteredProducts}
                 renderItem={renderProduct}
