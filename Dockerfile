@@ -2,20 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copier requirements.txt depuis le dossier backend
 COPY backend/requirements.txt .
-
-# Installer les dépendances
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le code source
 COPY backend/ ./backend/
 
-# Définir le PYTHONPATH
 ENV PYTHONPATH=/app
 
-# Exposer le port
-EXPOSE 8081
+# Utiliser le port 5000 (port par défaut de Railway)
+EXPOSE 5000
 
-# Démarrer l'application
-CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8081", "--workers", "4", "--threads", "4"]
+# Démarrer l'application sur le port 5000
+CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "4"]
