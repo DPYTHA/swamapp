@@ -73,8 +73,15 @@ CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
 CLOUDINARY_UPLOAD_PRESET = os.getenv("CLOUDINARY_UPLOAD_PRESET")
 
+# 🔍 LOGS DE DÉBOGAGE CLOUDINARY
+print(f"🔍 [DEBUG] CLOUDINARY_CLOUD_NAME: {CLOUDINARY_CLOUD_NAME}", file=sys.stderr)
+print(f"🔍 [DEBUG] CLOUDINARY_API_KEY: {CLOUDINARY_API_KEY[:4] if CLOUDINARY_API_KEY else 'None'}...", file=sys.stderr)
+print(f"🔍 [DEBUG] CLOUDINARY_API_SECRET: {CLOUDINARY_API_SECRET[:4] if CLOUDINARY_API_SECRET else 'None'}...", file=sys.stderr)
+print(f"🔍 [DEBUG] CLOUDINARY_UPLOAD_PRESET: {CLOUDINARY_UPLOAD_PRESET}", file=sys.stderr)
+
 # Configuration Cloudinary si les clés sont présentes
 CLOUDINARY_ENABLED = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+print(f"🔍 [DEBUG] CLOUDINARY_ENABLED: {CLOUDINARY_ENABLED}", file=sys.stderr)
 
 if CLOUDINARY_ENABLED:
     try:
@@ -90,7 +97,7 @@ if CLOUDINARY_ENABLED:
     except Exception as e:
         print(f"❌ Erreur Cloudinary: {e}", file=sys.stderr)
         CLOUDINARY_ENABLED = False
-
+        
 # ================== CONFIG ==================
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret')
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
