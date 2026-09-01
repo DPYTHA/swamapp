@@ -41,7 +41,11 @@ import os
 import uuid
 from functools import wraps
 from dotenv import load_dotenv
+# ================== ENV ==================
+load_dotenv()
 
+print("=== DÉMARRAGE AVEC ENV ===", file=sys.stderr)
+print(f"CLOUDINARY_CLOUD_NAME: {os.getenv('CLOUDINARY_CLOUD_NAME')}", file=sys.stderr)
 # ================== LOGGING ==================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,8 +56,7 @@ app = Flask(__name__)
 # CORS FIX (important pour mobile / Expo)
 CORS(app, supports_credentials=True, origins=['*'], methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allow_headers=['*'])
 
-# ================== ENV ==================
-load_dotenv()
+
 
 # ================== DATABASE FIX (RAILWAY) ==================
 database_url = os.getenv("DATABASE_URL")
