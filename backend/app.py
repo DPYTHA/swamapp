@@ -203,6 +203,62 @@ def health():
         "cloudinary": CLOUDINARY_ENABLED
     })
 
+
+@app.route('/api/admin/migrate-images', methods=['POST'])
+@jwt_required()
+def migrate_images():
+    """Route pour migrer les images vers Cloudinary"""
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        
+        if not user or user.role != 'admin':
+            return jsonify({'message': 'Accès non autorisé'}), 403
+        
+        # Récupérer les produits avec images locales
+        produits = Produit.query.filter(
+            Produit.image_url.like('%swamapp-production.up.railway.app/uploads%')
+        ).all()
+        
+        results = []
+        success_count = 0
+        
+        for produit in produits:
+            try:
+                # Télécharger l'image
+                import requests
+                response = requests.get(produit.image_url, timeout=30)
+                if response.status_code == 200:
+                    # Upload vers Cloudinary
+                    from io import BytesIO
+                    file = BytesIO(response.content)
+                    url = upload_image_to_cloudinary(file, "swam/products")
+                    if url:
+                        produit.image_url = url
+                        db.session.commit()
+                        success_count += 1
+                        results.append({
+                            'nom': produit.nom,
+                            'status': 'success',
+                            'url': url
+                        })
+            except Exception as e:
+                results.append({
+                    'nom': produit.nom,
+                    'status': 'error',
+                    'error': str(e)
+                })
+        
+        return jsonify({
+            'message': 'Migration terminée',
+            'success': success_count,
+            'total': len(produits),
+            'results': results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
 # ================== GENIUS PAY CONFIG ==================
 GENIUS_PAY_API_URL = os.getenv("GENIUS_PAY_API_URL", "https://geniuspay.ci/api/v1/merchant")
 GENIUS_PAY_API_KEY = os.getenv("GENIUS_PAY_API_KEY", "")
