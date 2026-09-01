@@ -97,7 +97,7 @@ if CLOUDINARY_ENABLED:
     except Exception as e:
         print(f"❌ Erreur Cloudinary: {e}", file=sys.stderr)
         CLOUDINARY_ENABLED = False
-        
+
 # ================== CONFIG ==================
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret')
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
@@ -114,10 +114,21 @@ jwt = JWTManager(app)
 # ================== FONCTIONS UPLOAD IMAGE ==================
 def upload_image_to_cloudinary(file, folder="swam/products"):
     """Upload une image vers Cloudinary"""
+    print(f"☁️ [DEBUG] Tentative d'upload vers Cloudinary...", file=sys.stderr)
+    print(f"☁️ [DEBUG] CLOUDINARY_ENABLED: {CLOUDINARY_ENABLED}", file=sys.stderr)
+    
     if not CLOUDINARY_ENABLED:
+        print(f"❌ [DEBUG] Cloudinary NON activé !", file=sys.stderr)
         return None
     
     try:
+        # Afficher des infos sur le fichier
+        if hasattr(file, 'filename'):
+            print(f"☁️ [DEBUG] Nom du fichier: {file.filename}", file=sys.stderr)
+            print(f"☁️ [DEBUG] Type du fichier: {file.content_type}", file=sys.stderr)
+        
+        # Tenter l'upload
+        print(f"☁️ [DEBUG] Upload vers Cloudinary...", file=sys.stderr)
         result = cloudinary.uploader.upload(
             file,
             folder=folder,
@@ -127,10 +138,17 @@ def upload_image_to_cloudinary(file, folder="swam/products"):
                 {"quality": "auto"}
             ]
         )
-        return result.get("secure_url")
+        
+        url = result.get("secure_url")
+        print(f"✅ [DEBUG] Upload réussi: {url}", file=sys.stderr)
+        return url
+        
     except Exception as e:
-        print(f"❌ Erreur upload Cloudinary: {e}")
+        print(f"❌ [DEBUG] Erreur upload Cloudinary: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return None
+    
 
 def delete_image_from_cloudinary(url):
     """Supprime une image de Cloudinary à partir de son URL"""
@@ -890,6 +908,7 @@ def get_admin_stats():
 def admin_upload_image():
     """Upload une image pour les produits (admin)"""
     try:
+        print(f"🖼️ [DEBUG] Début upload image", file=sys.stderr)
         current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
         
@@ -903,6 +922,8 @@ def admin_upload_image():
         if file.filename == '':
             return jsonify({'message': 'Fichier vide'}), 400
         
+        print(f"🖼️ [DEBUG] Fichier reçu: {file.filename}", file=sys.stderr)
+        
         # Vérifier l'extension
         allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
         if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
@@ -915,14 +936,23 @@ def admin_upload_image():
         if size > 5 * 1024 * 1024:  # 5MB
             return jsonify({'message': 'L\'image ne doit pas dépasser 5MB.'}), 400
         
+        print(f"🖼️ [DEBUG] Taille: {size} bytes", file=sys.stderr)
+        print(f"🖼️ [DEBUG] CLOUDINARY_ENABLED: {CLOUDINARY_ENABLED}", file=sys.stderr)
+        
         # Upload vers Cloudinary ou local
         url = None
         if CLOUDINARY_ENABLED:
+            print(f"☁️ Upload vers Cloudinary...", file=sys.stderr)
             url = upload_image_to_cloudinary(file, "swam/products")
+            print(f"☁️ Résultat Cloudinary: {url}", file=sys.stderr)
+        else:
+            print(f"⚠️ Cloudinary NON activé, fallback local", file=sys.stderr)
         
         # Fallback vers local si Cloudinary échoue ou n'est pas configuré
         if not url:
+            print(f"💾 Fallback vers local...", file=sys.stderr)
             url = upload_image_local(file)
+            print(f"💾 Résultat local: {url}", file=sys.stderr)
         
         if url:
             return jsonify({
@@ -934,8 +964,11 @@ def admin_upload_image():
             return jsonify({'message': 'Erreur lors de l\'upload de l\'image'}), 500
             
     except Exception as e:
-        print(f"❌ Erreur upload image: {e}")
+        print(f"❌ Erreur upload image: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return jsonify({'message': str(e)}), 500
+    
 
 @app.route('/api/admin/produits/<int:produit_id>/image', methods=['DELETE'])
 @jwt_required()
@@ -2701,6 +2734,18 @@ with app.app_context():
             logger.info("Admin par défaut créé: 771234567 / admin123")
     except Exception as e:
         logger.error(f"Erreur création tables: {e}")
+
+# ===================== ROUTE DE TEST CLOUDINARY =====================
+@app.route('/api/test-cloudinary', methods=['GET'])
+def test_cloudinary():
+    """Route de test pour vérifier la configuration Cloudinary"""
+    return jsonify({
+        'cloudinary_enabled': CLOUDINARY_ENABLED,
+        'cloud_name': CLOUDINARY_CLOUD_NAME,
+        'api_key_present': bool(CLOUDINARY_API_KEY),
+        'api_secret_present': bool(CLOUDINARY_API_SECRET),
+        'upload_preset': CLOUDINARY_UPLOAD_PRESET
+    })
 
 # ===================== LANCEMENT =====================
 if __name__ == "__main__":
