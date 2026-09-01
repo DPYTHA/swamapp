@@ -9,6 +9,6 @@ COPY backend/ ./backend/
 
 ENV PYTHONPATH=/app
 
-EXPOSE ${PORT:-8081}
+EXPOSE 8081
 
-CMD ["sh", "-c", "gunicorn backend.app:app --bind 0.0.0.0:${PORT:-8081} --workers 4 --threads 4"]
+CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8081", "--workers", "4", "--threads", "4"]
