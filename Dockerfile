@@ -9,8 +9,6 @@ COPY backend/ ./backend/
 
 ENV PYTHONPATH=/app
 
-# Utiliser le port 5000 (port par défaut de Railway)
-EXPOSE 5000
+EXPOSE ${PORT:-8081}
 
-# Démarrer l'application sur le port 5000
-CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "4"]
+CMD ["sh", "-c", "gunicorn backend.app:app --bind 0.0.0.0:${PORT:-8081} --workers 4 --threads 4"]
