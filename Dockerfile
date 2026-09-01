@@ -2,14 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copier les fichiers nécessaires (sans .env)
-COPY requirements.txt .
+# Copier requirements.txt depuis le dossier backend
+COPY backend/requirements.txt .
+
+# Installer les dépendances
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code source
 COPY backend/ ./backend/
-
-
 
 # Définir le PYTHONPATH
 ENV PYTHONPATH=/app
