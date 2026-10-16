@@ -1331,11 +1331,10 @@ def get_commandes_attente_livreur():
     if not admin or admin.role != 'admin':
         return jsonify({'message': 'Accès non autorisé'}), 403
     
-    commandes = Commande.query.filter_by(
-        statut='preparation',
-        livreur_id=None,
-        recherche_livreur=True
-    ).order_by(Commande.date_recherche.desc()).all()
+   commandes = Commande.query.filter_by(
+    statut='preparation',
+    livreur_id=None
+).order_by(Commande.date_commande.desc()).all()
     
     result = []
     for c in commandes:
@@ -1351,7 +1350,8 @@ def get_commandes_attente_livreur():
             'distance': c.distance,
             'frais_livraison': c.frais_livraison,
             'date_commande': c.date_commande.isoformat() if c.date_commande else None,
-            'gain_livreur': c.frais_livraison * 0.6
+            'gain_livreur': c.frais_livraison * 0.6,
+            'recherche_livreur': bool(c.recherche_livreur),
         })
     
     return jsonify(result), 200
