@@ -1321,9 +1321,6 @@ def get_livreurs_disponibles():
     
     return jsonify(result), 200
 
-# GET /api/admin/commandes-en-attente-livreur - Commandes en attente de livreur
-@app.route('/api/admin/commandes-en-attente-livreur', methods=['GET'])
-@jwt_required()
 
 # GET /api/admin/commandes-en-attente-livreur - Commandes en attente de livreur
 @app.route('/api/admin/commandes-en-attente-livreur', methods=['GET'])
@@ -1957,7 +1954,7 @@ def livreur_historique_livraisons():
         'statut': c.statut,
         'distance': c.distance,
         'frais_livraison': c.frais_livraison,
-        'gain': c.frais_livraison * 0.7,
+        'gain': c.frais_livraison * 0.6,
         'date_commande': c.date_commande.isoformat() if c.date_commande else None,
         'date_livraison': c.date_livraison.isoformat() if c.date_livraison else None
     } for c in commandes])
