@@ -1351,7 +1351,7 @@ def get_commandes_attente_livreur():
             'frais_livraison': c.frais_livraison,
             'date_commande': c.date_commande.isoformat() if c.date_commande else None,
             'gain_livreur': c.frais_livraison * 0.6,
-            'recherche_livreur': bool(c.recherche_livreur),
+            'recherche_livreur': bool(c.recherche_livreur)
         })
     
     return jsonify(result), 200
