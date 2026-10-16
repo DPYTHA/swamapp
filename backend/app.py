@@ -1324,6 +1324,10 @@ def get_livreurs_disponibles():
 # GET /api/admin/commandes-en-attente-livreur - Commandes en attente de livreur
 @app.route('/api/admin/commandes-en-attente-livreur', methods=['GET'])
 @jwt_required()
+
+# GET /api/admin/commandes-en-attente-livreur - Commandes en attente de livreur
+@app.route('/api/admin/commandes-en-attente-livreur', methods=['GET'])
+@jwt_required()
 def get_commandes_attente_livreur():
     current_user_id = get_jwt_identity()
     admin = User.query.get(current_user_id)
@@ -1331,10 +1335,10 @@ def get_commandes_attente_livreur():
     if not admin or admin.role != 'admin':
         return jsonify({'message': 'Accès non autorisé'}), 403
     
-   commandes = Commande.query.filter_by(
-    statut='preparation',
-    livreur_id=None
-).order_by(Commande.date_commande.desc()).all()
+    commandes = Commande.query.filter_by(
+        statut='preparation',
+        livreur_id=None
+    ).order_by(Commande.date_commande.desc()).all()
     
     result = []
     for c in commandes:
@@ -1355,6 +1359,7 @@ def get_commandes_attente_livreur():
         })
     
     return jsonify(result), 200
+
 
 # POST /api/admin/commandes/<commande_id>/rechercher-livreur - Lancer la recherche de livreur
 @app.route('/api/admin/commandes/<int:commande_id>/rechercher-livreur', methods=['POST'])
