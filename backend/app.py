@@ -2417,7 +2417,7 @@ def reset_password():
     
     reset_code = ResetCode.query.filter_by(telephone=telephone, code=code, used=False).first()
     
-    if not reset_code or reset_code.expires_at < datetime.now(timezone.utc):
+    if not reset_code or reset_code.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         return jsonify({'message': 'Code invalide ou expiré'}), 400
     
     if len(new_password) < 4:
@@ -2432,6 +2432,7 @@ def reset_password():
     db.session.commit()
     
     return jsonify({'message': 'Mot de passe réinitialisé avec succès'}), 200
+
 
 # ===================== FONCTIONS GENIUS PAY =====================
 
