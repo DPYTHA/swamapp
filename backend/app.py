@@ -473,7 +473,7 @@ def validate_telephone(telephone):
     return re.match(pattern, telephone) is not None
 
 def calculer_frais_livraison(distance):
-    return (distance // 100 + (1 if distance % 100 > 0 else 0)) * 150
+    return (distance // 100 + (1 if distance % 100 > 0 else 0)) * 100
 
 # ===================== FONCTIONS NOTIFICATIONS =====================
 def send_push_notification(user_id, title, body, data=None, notification_type='default'):
